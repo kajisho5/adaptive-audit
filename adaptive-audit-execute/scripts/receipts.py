@@ -202,8 +202,11 @@ def _compute_debt(project_root: str) -> dict:
         entry["runs_since_last_deep"] = _runs_since(receipts, did, entry.pop("last_deep_run_index"))
 
     # Execution-level tallies (verified: a domain only counts here once an
-    # execution result actually references it). Depth is resolved by looking
-    # up the plan the result claims to have executed.
+    # execution result actually references it). Depth is the depth that was
+    # *actually executed* (dm["depth_executed"], written by adaptive-audit-execute
+    # since staged escalation can stop short of the plan's depth) -- falling back
+    # to the plan's depth only for older result records written before that field
+    # existed, when execution never stopped short of the plan on its own.
     last_verified_deep_index = {}
     for idx, res in enumerate(results):
         plan = receipts_by_id.get(res.get("plan_id"))
@@ -216,7 +219,7 @@ def _compute_debt(project_root: str) -> dict:
             did = dm["domain_id"]
             entry = debt.setdefault(did, _new_entry(did))
             entry["times_executed"] += 1
-            depth = plan_depths.get(did)
+            depth = dm.get("depth_executed") or plan_depths.get(did)
             if depth and (
                 entry["max_verified_depth_ever"] is None
                 or DEPTH_RANK[depth] > DEPTH_RANK[entry["max_verified_depth_ever"]]

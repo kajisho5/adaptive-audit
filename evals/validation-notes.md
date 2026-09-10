@@ -606,3 +606,57 @@ downgraded CVE-exploitability claim), which is the concrete evidence this
 project's differentiation claim (adversarial Verify, not just a second opinion
 that agrees) actually holds under real, unfamiliar code rather than only on
 synthetic fixtures built to demonstrate it.
+
+## Iteration 10 — staged depth escalation (`depth_confidence` + Quick-first for provisional domains)
+
+Iterations 8-9's real cost data (~1.7M and ~1.53M tokens for full Deep/Standard
+multi-domain runs) motivated a design change: a domain assigned Standard/Deep
+depth purely from a domain's generic baseline reasoning (no specific signal
+pointing at *this* project) shouldn't automatically cost a full Standard/Deep
+Hunt pass. `adaptive-audit-plan` now records a `depth_confidence`
+(`high`/`provisional`) alongside any Standard/Deep depth assignment, and
+`adaptive-audit-execute`'s Hunt step (1) runs `high`-confidence domains straight
+at their planned depth as before, but (2) runs a `provisional` domain's planned
+Standard/Deep depth as a cheap Quick pass first, escalating to the full depth
+(seeded with the Quick pass's own candidates, not discarding that work) only if
+the Quick pass actually found something, and otherwise stopping at Quick.
+
+**A real latent bug surfaced while designing this, fixed in the same change**:
+`receipts.py`'s debt calculation resolved a result's verified depth by looking
+up the *plan's* depth for that domain, never checking the result record itself.
+A domain that stopped at Quick under the new staged-escalation rule would have
+been silently miscounted as verified at its full planned depth — exactly the
+failure mode the whole receipts mechanism exists to prevent. Fixed by adding a
+`depth_executed` field to the result-record schema (the depth Hunt actually
+ran at) and having the debt calculation prefer it, falling back to the plan's
+depth only for result records written before this field existed.
+
+**Validation** (proportionate to the change — not a full 7-domain real-world
+audit, since that wasn't needed to validate this specific mechanism):
+- Two deterministic unit tests against `receipts.py` directly: (a) a
+  Quick-confirmed staged-escalation stop is recorded as `max_verified_depth_ever
+  == "quick"`, not the plan's `"deep"`; (b) an old-style result record with no
+  `depth_executed` field still falls back to the plan's depth correctly
+  (backward compatible with every result recorded before this change).
+- One real, cheap fixture run (`evals/fixtures/cli-data-processor/`, ~31 lines)
+  exercising both branches with true isolated Hunt subagents: `performance`
+  assigned Standard/`high` (an explicit, already-commented O(n·m) scan pattern)
+  ran straight to Standard and found 2 real findings; `correctness` assigned
+  Standard/`provisional` (generic baseline only) ran Quick first, found 3
+  candidates, and correctly escalated. The escalated Standard pass, seeded with
+  the Quick candidates, refined them, correctly ruled out one hypothesis it was
+  asked to double-check (a suspected row/label misalignment — confirmed not a
+  bug), and found one additional real issue the Quick pass had missed
+  (duplicate lookup-table ids silently resolved by file order via `iloc[0]`) —
+  i.e. escalation isn't just "run it again," it demonstrably builds on and goes
+  beyond the cheap first pass. Receipts written for the run confirmed the debt
+  report shows both domains correctly as verified at `standard` (matching the
+  depth actually reached after escalation, not the intermediate Quick stage).
+
+Known limitation not yet tested: the *cost savings* case (a `provisional`
+domain whose Quick pass genuinely finds nothing and correctly stops there,
+saving a full Standard/Deep pass) wasn't exercised against a real project in
+this validation — both real projects audited so far (iterations 8-9) predate
+this feature, and the one live fixture run here happened to escalate. Worth
+confirming on the next real-world run that a stop-at-Quick case is disclosed
+correctly in the 実行サマリー and doesn't get mistaken for a full clean result.

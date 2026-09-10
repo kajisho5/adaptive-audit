@@ -136,6 +136,28 @@ names between runs looks like it was never audited.
 - For every domain that scored low across the board, it's fine to omit it from the
   output entirely — don't pad the plan with a long list of irrelevant domains.
 
+**For every domain assigned Standard or Deep, also record a `depth_confidence`:**
+Standard/Deep execution is real cost (`adaptive-audit-execute` dispatches at least
+one full-depth Hunt subagent per domain) — this field tells that skill whether it's
+safe to spend that cost immediately or worth cost-gating first.
+
+- **`high`**: the Standard/Deep assignment is grounded in a *specific* signal from
+  step 2 or 3 — a concrete file/pattern citation, an explicit blast-radius category
+  (auth/payment/PII/money movement), the person explicitly naming this domain, or a
+  high accumulated-debt bump. Something a skeptic could point at and say "yes, that
+  clearly warrants more than a Quick pass."
+- **`provisional`**: the Standard/Deep assignment mainly comes from a domain's
+  generic baseline reasoning (e.g. correctness's "any project" baseline, or
+  test-coverage's "any project with a test directory" baseline) *without* a
+  specific signal pointing at Standard/Deep depth *specifically* for this project —
+  it's a reasonable default, not a confident call.
+
+This is not a new scoring input — it doesn't change which domains get selected or
+what depth they're assigned in step 3-4 above. It's a separate, honest label on
+*why* that depth was assigned, and `adaptive-audit-execute` uses it to decide
+whether to run that depth immediately or stage up to it (see that skill's step 1).
+Domains assigned Quick, or excluded, don't need this field (leave it out or null).
+
 ### 5. Have the plan itself attacked before trusting it
 
 Every other verification pattern in this space (and in `adaptive-audit-execute`)
@@ -228,7 +250,8 @@ language; keep the JSON block's keys as-is):
  Note any signal you could not check.)
 
 ## 選定した監査観点
-(table or list: domain | depth (Quick/Standard/Deep) | why — cite the specific
+(table or list: domain | depth (Quick/Standard/Deep) | depth_confidence
+ (high/provisional, only for Standard/Deep domains) | why — cite the specific
  signal(s) that drove the score, including debt from step 0 where it applied,
  not just the domain name)
 
@@ -255,6 +278,7 @@ language; keep the JSON block's keys as-is):
       "domain_id": "<one id from references/audit-domains.md, e.g. \"security\">",
       "selected": true,
       "depth": "quick | standard | deep",
+      "depth_confidence": "high | provisional | null (only meaningful when depth is standard/deep)",
       "reasoning": "<short, same substance as the table above>",
       "evidence": ["<file:line or short pattern citation>", "..."]
     }

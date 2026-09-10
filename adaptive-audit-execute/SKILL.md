@@ -105,6 +105,42 @@ audited. This holds regardless of dry-run mode; dry-run only changes whether
 this skill's own receipt/result get written, not whether the target project's
 own files are ever touched (they never are, either way).
 
+**Staged escalation for `depth_confidence: "provisional"` domains.** A domain
+the plan assigned Standard or Deep with `depth_confidence: "high"` (or with no
+`depth_confidence` field at all, for a plan produced before this field existed)
+goes straight to that depth as a single Hunt pass — no change from before. But
+a domain assigned Standard or Deep with `depth_confidence: "provisional"` (a
+generic-baseline call, not a specific strong signal) gets a cheaper two-step
+treatment instead, since a full Standard/Deep Hunt subagent is real, non-trivial
+cost that a provisional call hasn't clearly earned yet:
+
+1. Dispatch a Quick-depth Hunt pass for that domain first (same isolation rules
+   as any other Hunt pass).
+2. If that Quick pass returns **any** candidate (regardless of severity), escalate:
+   dispatch a second Hunt pass at the plan's originally assigned depth (Standard
+   or Deep) for the same domain — but this time give the hunter the Quick pass's
+   own candidates as known starting points to build on and go deeper from, plus
+   the instruction to also look beyond them. This keeps the Quick pass's work from
+   being wasted when escalation happens, rather than discarding it and starting
+   the deeper pass from nothing.
+3. If the Quick pass returns **zero** candidates, stop at Quick for that domain.
+   Do not silently treat this as equivalent to a clean Standard/Deep result: it
+   means only a Quick-depth pass actually ran, and step 3 below (and the receipt
+   in step 5) must record the depth that was *actually executed* (`quick`), not
+   the depth the plan originally called for. This is the same "count what
+   actually happened" principle this skill already applies to a cut-short Deep
+   pass — a provisional domain that stopped at Quick has real, disclosed audit
+   debt remaining on it, even though nothing went wrong in this run.
+
+This only ever reduces cost relative to always running the full planned depth —
+it never runs *more* Hunt passes than a `high`-confidence domain of the same
+planned depth would, since a `high`-confidence domain never gets a Quick pass
+at all. The tradeoff is real, not free: a `provisional` domain that stops at
+Quick got less scrutiny this run than its plan originally called for, in
+exchange for not spending a full Standard/Deep pass on a domain whose need for
+that depth wasn't clearly established in the first place. State plainly in the
+実行サマリー whenever this happened, and for which domains.
+
 Instruct the hunter to output candidates in this shape, one per issue, and to
 resist padding the list — a domain with nothing wrong should come back with an
 empty candidate list, not manufactured minor nits:
@@ -166,6 +202,14 @@ worth surfacing on its own, not something to paper over by reporting whatever wa
 found as if it were complete. This is what keeps the audit-debt history (step 5)
 honest: a domain only counts as actually looked at if it actually was.
 
+A `depth_confidence: "provisional"` domain that stopped at Quick under step 1's
+staged-escalation rule is a different case from an unintended shortfall — it's
+the mechanism working as designed, not something that went wrong — but it still
+gets recorded as executed-at-Quick, not at the plan's originally stated depth,
+for the same reason: the debt history has to reflect what actually happened.
+Distinguish the two plainly in the output (an intentional staged stop vs. a
+genuine shortfall) so a reader doesn't mistake one for the other.
+
 ### 4. Output the findings report
 
 Use the exact structure in "Output format" below, in the same language as the
@@ -200,6 +244,16 @@ skipped, or a Deep pass was really only completed to Quick depth) — the whole
 point of this record is that `max_verified_depth_ever` in the debt calculation
 reflects work that actually happened, not work that was merely attempted.
 
+**Record each domain's `depth_executed`** — the depth that Hunt actually ran at
+for that domain, not the plan's originally assigned depth. For almost every
+domain these are the same value. They differ specifically for a
+`depth_confidence: "provisional"` domain that stopped at Quick under step 1's
+staged-escalation rule: its `depth_executed` is `"quick"`, even though the plan
+said `"standard"` or `"deep"`. `receipts.py`'s debt calculation reads this field
+(falling back to the plan's depth only for old result records that predate it)
+— getting this field right is what keeps a staged-escalation stop from being
+silently miscounted as full-depth verification.
+
 ## Output format
 
 ALWAYS use this exact structure (translate headings to the request's language;
@@ -229,6 +283,7 @@ keep the JSON keys as-is):
   "domains": [
     {
       "domain_id": "<domain actually executed>",
+      "depth_executed": "quick | standard | deep (the depth Hunt actually ran at -- see step 5)",
       "confirmed_findings": 0,
       "plausible_findings": 0,
       "rejected_findings": 0
