@@ -125,14 +125,48 @@ names between runs looks like it was never audited.
 - For every domain that scored low across the board, it's fine to omit it from the
   output entirely — don't pad the plan with a long list of irrelevant domains.
 
-### 5. Output the plan
+### 5. Have the plan itself attacked before trusting it
+
+Every other verification pattern in this space (and in `adaptive-audit-execute`)
+checks *findings* — whether a reported bug is real. Almost nothing checks
+whether the *plan* itself is any good, which means a confidently-written plan
+that missed something obvious would sail through unchallenged. Close that gap
+here, on every run, not just when something feels uncertain.
+
+Dispatch a fresh, isolated critic subagent (via whatever subagent-spawning
+capability this session has — the Task tool in Claude Code CLI, or the
+equivalent here). Give it only: the raw project signals from step 2 and the
+domain selection table from step 4 (selected + excluded, with depths and
+reasoning) — not your own narrative justification for why the plan is good, and
+not the original request. Ask it to argue against the plan: which selected
+domain's depth looks mismatched to the signals actually cited for it (over- or
+under-assigned)? Which excluded domain's stated reason doesn't actually hold up
+against the signals listed? Is there a signal in step 2 that doesn't map to
+*any* domain in the table at all?
+
+Take the critic's output seriously, not performatively:
+- A concrete, well-founded objection → revise the plan (change a depth, move a
+  domain from excluded to selected, or vice versa) before writing the final
+  output. Don't just append the objection as a footnote next to an unchanged
+  decision.
+- An objection that doesn't hold up on its own re-examination → keep the
+  original decision, but record why the objection was rejected. Silently
+  ignoring a raised objection is exactly the failure mode this step exists to
+  catch — for the plan itself, not just for findings later.
+- No objections raised → say so plainly; it's a real (if less interesting)
+  outcome, not something to omit.
+
+Record the outcome of this step in the "計画の自己検証" output section either
+way.
+
+### 6. Output the plan
 
 Use the exact structure in "Output format" below. Write the prose sections in the
 same language the person used in their request; keep the JSON block's keys in
 English regardless (it's for machines, not for reading). Do not proceed to run any
 audit, search for actual bugs, or produce findings — stop once the plan is written.
 
-### 6. Record this run for next time
+### 7. Record this run for next time
 
 Write the JSON block from your output to a temp file and run:
 
@@ -174,6 +208,12 @@ language; keep the JSON block's keys as-is):
 
 ## 見送った観点
 (domain | why not selected this run — even if project signals existed)
+
+## 計画の自己検証
+(step 5's outcome: what the isolated critic objected to, if anything; for each
+ objection, whether the plan was revised because of it or the objection was
+ examined and rejected, and why. If no objections were raised, say so plainly
+ rather than omitting this section.)
 
 ## 推奨する実行順序
 (short list — which domain to actually audit first and why, e.g. highest blast

@@ -27,7 +27,8 @@ Subcommands:
                                                   store FILE (an execution result) linked to plan receipt ID, print its path
   list         --project-root PATH               print all plan receipts, oldest first
   list-results --project-root PATH               print all execution results, oldest first
-  debt         --project-root PATH               print per-domain audit-debt stats computed from history
+  debt         --project-root PATH               print per-domain audit-debt stats computed from history, as JSON
+  report       --project-root PATH               same stats as `debt`, as a human-readable table + attention list
 """
 import argparse
 import hashlib
@@ -138,8 +139,18 @@ def cmd_write_result(args):
 
 
 def cmd_debt(args):
-    receipts = load_receipts(args.project_root)
-    results = load_results(args.project_root)
+    computed = _compute_debt(args.project_root)
+    print(json.dumps(computed, ensure_ascii=False, indent=2))
+
+
+def cmd_report(args):
+    computed = _compute_debt(args.project_root)
+    print(_render_report(args.project_root, computed))
+
+
+def _compute_debt(project_root: str) -> dict:
+    receipts = load_receipts(project_root)
+    results = load_results(project_root)
     receipts_by_id = {r["id"]: r for r in receipts}
 
     debt = {}
@@ -200,10 +211,80 @@ def cmd_debt(args):
 
     domains = list(debt.values())
     domains.sort(key=lambda e: (-e["runs_since_last_deep"], -e["times_excluded"]))
-    print(json.dumps(
-        {"total_runs": len(receipts), "total_executions": len(results), "domains": domains},
-        ensure_ascii=False, indent=2,
-    ))
+    return {"total_runs": len(receipts), "total_executions": len(results), "domains": domains}
+
+
+def _debt_status(entry: dict) -> str:
+    # A small, fixed rubric -- not a precise measurement, just enough to sort
+    # a human's attention at a glance. Verified (executed) state always wins
+    # over planned-only state: a domain nobody has ever actually looked at is
+    # worse than one that's merely due for another look.
+    if entry["times_executed"] == 0:
+        if entry["times_selected"] == 0:
+            return "UNAUDITED" if entry["times_appeared"] > 0 else "UNKNOWN"
+        return "PLANNED-ONLY"  # selected in a plan, never actually executed/verified
+    if entry["max_verified_depth_ever"] != "deep" and entry["runs_since_last_deep"] >= 3:
+        return "STALE"
+    if entry["runs_since_last_deep"] >= 2:
+        return "AGING"
+    return "FRESH"
+
+
+_STATUS_ORDER = {"UNAUDITED": 0, "PLANNED-ONLY": 1, "STALE": 2, "AGING": 3, "FRESH": 4, "UNKNOWN": 5}
+
+
+def _render_report(project_root: str, computed: dict) -> str:
+    lines = []
+    lines.append(f"Audit Debt Report — {project_root}")
+    lines.append(f"fingerprint: {project_fingerprint(project_root)}")
+    lines.append(f"plan runs: {computed['total_runs']}   executions: {computed['total_executions']}")
+    lines.append("")
+
+    if not computed["domains"]:
+        lines.append("No history recorded yet for this project.")
+        return "\n".join(lines)
+
+    domains = sorted(
+        computed["domains"],
+        key=lambda e: (_STATUS_ORDER[_debt_status(e)], -e["runs_since_last_deep"]),
+    )
+
+    header = f"{'DOMAIN':<24} {'STATUS':<13} {'VERIFIED DEPTH':<15} {'SINCE DEEP':<11} {'SEL/EXCL':<9}"
+    lines.append(header)
+    lines.append("-" * len(header))
+    for e in domains:
+        status = _debt_status(e)
+        verified = e["max_verified_depth_ever"] or "-"
+        since = str(e["runs_since_last_deep"])
+        sel_excl = f"{e['times_selected']}/{e['times_excluded']}"
+        lines.append(f"{e['domain_id']:<24} {status:<13} {verified:<15} {since:<11} {sel_excl:<9}")
+
+    lines.append("")
+    stale_or_worse = [e for e in domains if _debt_status(e) in ("UNAUDITED", "PLANNED-ONLY", "STALE")]
+    if stale_or_worse:
+        lines.append("Needs attention:")
+        for e in stale_or_worse:
+            status = _debt_status(e)
+            if status == "UNAUDITED":
+                why = "planned and excluded every time it's come up -- never selected"
+            elif status == "PLANNED-ONLY":
+                why = "selected in a plan but no execution result was ever recorded for it"
+            else:
+                why = f"verified {e['runs_since_last_deep']} runs ago or more, not since at Deep"
+            lines.append(f"  - {e['domain_id']}: {why}")
+    else:
+        lines.append("No domain is currently flagged as stale or unaudited.")
+
+    lines.append("")
+    lines.append(
+        "Note: UNAUDITED/PLANNED-ONLY here is a numeric proxy, not a verdict -- a"
+        " domain can be legitimately never-selected because it's structurally"
+        " inapplicable (e.g. dependency-health with zero dependencies), not because"
+        " it's neglected. Check the plan receipts' own `reasoning` field for that"
+        " domain before treating a row here as an actual gap."
+    )
+
+    return "\n".join(lines)
 
 
 def _new_entry(did):
@@ -259,6 +340,10 @@ def main():
     p = sub.add_parser("debt")
     p.add_argument("--project-root", required=True)
     p.set_defaults(func=cmd_debt)
+
+    p = sub.add_parser("report")
+    p.add_argument("--project-root", required=True)
+    p.set_defaults(func=cmd_report)
 
     args = parser.parse_args()
     args.func(args)
