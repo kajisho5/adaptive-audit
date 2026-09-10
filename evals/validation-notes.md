@@ -382,3 +382,18 @@ design sketch for eventual integration (as a second, independent angle inside
 Verify, not a replacement for domain-based hunting) is recorded in the
 experimental reference file for whenever it's judged worth the validation cost
 of pursuing further.
+
+---
+
+# Addendum — `export-csv`
+
+Added after the user pointed out an HTML dashboard mockup isn't actually
+shareable. Rather than adding a PDF or XLSX writer (both need a third-party
+dependency, breaking this script's stdlib-only design), `export-csv` reuses
+the exact same `_compute_debt` computation `debt`/`report` already use and
+writes it as CSV — opens directly in Excel/Sheets with no conversion step.
+Manually verified against the real `task-api` history: header + 10 domain rows,
+correct status/depth/count values matching `report`'s own output for the same
+data. A PDF, when actually needed to hand to someone, is left to Claude to
+render from this CSV or from `report`'s text on request, rather than being a
+feature of the script itself.

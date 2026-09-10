@@ -29,8 +29,14 @@ Subcommands:
   list-results --project-root PATH               print all execution results, oldest first
   debt         --project-root PATH               print per-domain audit-debt stats computed from history, as JSON
   report       --project-root PATH               same stats as `debt`, as a human-readable table + attention list
+  export-csv   --project-root PATH               same stats as `debt`, as CSV on stdout -- opens directly in
+                                                  Excel/Sheets. For a PDF instead, ask Claude to render one from
+                                                  this CSV or from `report`'s output when you actually need a
+                                                  shareable document -- deliberately not a feature of this script,
+                                                  which stays dependency-free (no PDF library, no XLSX writer).
 """
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -146,6 +152,21 @@ def cmd_debt(args):
 def cmd_report(args):
     computed = _compute_debt(args.project_root)
     print(_render_report(args.project_root, computed))
+
+
+def cmd_export_csv(args):
+    computed = _compute_debt(args.project_root)
+    fieldnames = [
+        "domain_id", "status", "times_appeared", "times_selected", "times_excluded",
+        "max_depth_ever", "runs_since_last_deep", "times_executed",
+        "max_verified_depth_ever", "runs_since_last_verified_deep",
+    ]
+    writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for e in computed["domains"]:
+        row = dict(e)
+        row["status"] = _debt_status(e)
+        writer.writerow(row)
 
 
 def _compute_debt(project_root: str) -> dict:
@@ -344,6 +365,10 @@ def main():
     p = sub.add_parser("report")
     p.add_argument("--project-root", required=True)
     p.set_defaults(func=cmd_report)
+
+    p = sub.add_parser("export-csv")
+    p.add_argument("--project-root", required=True)
+    p.set_defaults(func=cmd_export_csv)
 
     args = parser.parse_args()
     args.func(args)

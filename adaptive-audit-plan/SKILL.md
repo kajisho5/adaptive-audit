@@ -247,6 +247,9 @@ and the "見送った観点" section both read.
   domain, and what each depth tier means. Read this during step 3, not before —
   it's reference material, not something to memorize up front.
 - `scripts/receipts.py` — reads and writes this project's audit history (used in
-  steps 0 and 6). Stdlib-only Python; run with `python3`, no install needed. Run
+  steps 0 and 7). Stdlib-only Python; run with `python3`, no install needed. Run
   `python3 <skill-dir>/scripts/receipts.py --help` if the exact flags aren't clear
-  from steps 0/6 above.
+  from steps 0/7 above. Also has `report` (human-readable) and `export-csv`
+  (for Excel/Sheets) — not part of this skill's own steps, but worth mentioning
+  to someone who wants to see or share the accumulated debt picture directly,
+  rather than only through a freshly generated plan.

@@ -15,7 +15,10 @@ Two Claude Code Skills, meant to be installed together:
   project, which domains keep getting skipped across differently-framed
   requests over time, and surfaces that accumulated **audit debt** even when
   the current request doesn't mention it (`scripts/receipts.py report` renders
-  this as a human-readable table, not just internal JSON). Before finalizing,
+  this as a human-readable table, `export-csv` as CSV for Excel/Sheets — ask
+  Claude to render a PDF from either when you need one to actually hand to
+  someone, rather than that being a built-in, dependency-adding feature of the
+  script itself). Before finalizing,
   an isolated critic subagent argues against the plan itself — mismatched
   depth, an exclusion whose stated reason doesn't hold up, a signal that maps
   to no domain — closing a gap nothing else in the competitive research does:
