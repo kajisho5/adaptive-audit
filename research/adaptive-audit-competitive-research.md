@@ -308,6 +308,12 @@ Project Understanding → Invariant Extraction → Risk Model → Adaptive Audit
 - **Skill名**: **MODIFY（保留）** — 現時点でのスコープ（フルチェーン仮説）のままなら"Adaptive Audit Engine"は「adaptive」「audit」「engine」という、差別化要素にならない一般語の組み合わせであり、cloudflare/security-audit-skill等と誤認されるリスクがある。**§5で絞り込んだスコープ（ドメイン非依存性 + 監査タイプ横断のAudit Debt管理）が固まった段階で改めて命名すべき。**
 - 参考候補（スコアリングは絞り込み後に実施推奨）: `audit-debt` / `scope-audit` / `audit-coverage-ledger` 等、"何を監査するか"ではなく"何を横断的に管理するか"を軸にした名称の方が、実際の差別化要素を正しく想起させる可能性が高い。
 
+### 9.4 最終命名決定（スコープ確定・実世界検証後）
+
+スコープが完全に固まり（`adaptive-audit-plan`/`adaptive-audit-execute`の2スキル構成、Audit Debt追跡、計画自己検証、ドメイン非依存Hunt→Verify）、`kajisho5/ffmpeg-skill`と`obsproject/obs-studio`での実世界検証も完了した時点で、`adaptive-audit`のまま確定とした。
+
+再検討時に`scope-debt`/`coverage-ledger`/`audit-recall`等の追加候補をGitHub実地調査したが（完全一致衝突の有無を実際に検索して確認）、いずれも「Audit Debt管理」という一方のスキル（`adaptive-audit-plan`）の差別化要素は正確に表現できても、もう一方のスキル（`adaptive-audit-execute`のHunt→Verify実行）とは意味的に噛み合わず、2スキル構成を単一の名前で自然に束ねられなかった。`adaptive-audit`は一般語の組み合わせという9.3の懸念は残るが、`-plan`/`-execute`という接尾辞が両スキルの役割分担を素直に表現できている実利、および既存の公開PR・ドキュメント参照を壊さないリネーム不要コストを踏まえ、**確定名として採用**。
+
 ---
 
 ## 10. Final Architecture（最終候補・絞り込み版）

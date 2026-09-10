@@ -1,8 +1,5 @@
 # adaptive-audit
 
-> Status: **provisional**. Repository/skill names are working names, not final —
-> see `research/adaptive-audit-competitive-research.md` for why.
-
 Two Claude Code Skills, meant to be installed together. **`adaptive-audit-execute`
 is the default for a plain request like "バグチェックして" or "check this for
 bugs"** — a single natural-language request producing a real, complete audit
