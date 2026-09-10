@@ -1,6 +1,6 @@
 ---
 name: adaptive-audit-execute
-description: Actually executes an Audit Plan produced by the adaptive-audit-plan skill — runs a Hunt-then-Verify pass per selected domain (an isolated agent looks for concrete issues, then a separate isolated agent independently checks each candidate against the source before it's reported) and produces confirmed findings, not just a plan. Use this when someone has already seen an Audit Plan and wants it carried out, or explicitly asks to actually find/fix problems rather than just get a plan (e.g. "このプランを実行して", "実際に脆弱性を探して", "見つかった問題を直して", "run the audit", "find the actual bugs, not just a plan"). If no plan exists yet for this request, this skill produces one first (by following adaptive-audit-plan's own process) rather than auditing without a scope decision. Never audits the target project's own files — reads only, and any reproduction/PoC work happens outside the project directory. Respects an explicit read-only/dry-run request (skips writing the execution result; the audit itself still runs and still reports real findings) rather than treating "don't touch anything" as a reason to decline the whole audit. Do not use this for a first vague ask like "バグチェックして" with no other signal that the person wants execution, not just scoping — that should get a plan on its own first (adaptive-audit-plan), which this skill can then be asked to carry out.
+description: THE DEFAULT SKILL for any "check/review/audit this code" request, including a first, vague, unqualified one like "バグチェックして", "check this for bugs", "review this before we ship", "make sure this is solid" — with no other signal, this is the skill to use, not adaptive-audit-plan alone. Produces a scoped plan first (by following adaptive-audit-plan's process — inspecting the actual project and deciding which domains/depths genuinely matter, exactly as adaptive-audit-plan would on its own) and then, in the same response, actually carries it out: an isolated Hunt pass per selected domain, then a separate isolated Verify pass that independently checks each candidate against the source before it's reported (CONFIRMED/PLAUSIBLE/REJECTED) — real findings, not just a plan. A natural-language request producing a real, complete audit end to end, with no required follow-up question, is the entire point of this project; use adaptive-audit-plan by itself only when the person explicitly wants scoping without execution ("何を確認すべきか教えて", "計画だけ欲しい", "まだ実行しないで", "先に方針を確認したい", "what should we look at, don't actually check yet") — that is the exception this skill is not for, not the other way around. Never audits the target project's own files — reads only, and any reproduction/PoC work happens outside the project directory. Respects an explicit read-only/dry-run request (skips writing the execution result; the audit itself still runs and still reports real findings) rather than treating "don't touch anything" as a reason to decline the whole audit.
 ---
 
 # Adaptive Audit — Plan Executor
@@ -14,6 +14,21 @@ skips the scoping step entirely (generic checklist, every time) or never actuall
 finds anything (all scope, no substance). This skill is the second half: given a
 plan, go find out whether the things it flagged as worth checking actually have
 problems.
+
+That separation is an internal implementation detail, not something the person
+asking should have to know about or manage themselves. The founding goal of this
+whole project is that a single natural-language request — "バグチェックして" and
+nothing else — produces a real, complete audit, the same way a human senior
+engineer doesn't ask "should I first tell you my review plan and wait for your
+go-ahead?" before actually reviewing something asked of them plainly. This skill
+is what makes that true: it runs step 0 below to get (or generate) a plan, then
+keeps going into Hunt/Verify in the same turn. Splitting that into two skills a
+person has to explicitly chain themselves ("get me a plan" ... "now run it")
+would recreate exactly the two-step, configure-then-run friction this project
+set out to remove — so don't treat "no explicit execution signal in the request"
+as a reason to stop after planning. Stopping after a plan is the deliberate,
+narrower behavior of using adaptive-audit-plan directly, reserved for when
+someone actually asks for only that.
 
 The mechanism here — an isolated Hunter pass, then a separate isolated Skeptic/
 Verify pass that doesn't inherit the Hunter's framing — is not novel; it is the

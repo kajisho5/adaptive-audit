@@ -3,31 +3,38 @@
 > Status: **provisional**. Repository/skill names are working names, not final —
 > see `research/adaptive-audit-competitive-research.md` for why.
 
-Two Claude Code Skills, meant to be installed together:
+Two Claude Code Skills, meant to be installed together. **`adaptive-audit-execute`
+is the default for a plain request like "バグチェックして" or "check this for
+bugs"** — a single natural-language request producing a real, complete audit
+with no required follow-up question is the founding goal of this project, so a
+vague first ask should not stop at a plan waiting for a second command.
 
-- **`adaptive-audit-plan`** — given a natural-language request like
-  "バグチェックして" or "check this for bugs", inspects the actual target
-  project and produces a scoped, risk-aware **Audit Plan**: which audit domains
-  actually matter here (security, correctness, performance, reliability,
+- **`adaptive-audit-execute`** — given that kind of request, first generates a
+  scoped, risk-aware **Audit Plan** (by running `adaptive-audit-plan`'s own
+  process: inspecting the actual project and deciding which audit domains
+  genuinely matter here — security, correctness, performance, reliability,
   architecture, data-integrity, concurrency, dependency-health,
-  configuration/deployment, test-coverage, observability), at what depth, and
-  explicitly which domains were *not* selected and why. It also remembers, per
-  project, which domains keep getting skipped across differently-framed
-  requests over time, and surfaces that accumulated **audit debt** even when
-  the current request doesn't mention it (`scripts/receipts.py report` renders
-  this as a human-readable table, `export-csv` as CSV for Excel/Sheets — ask
-  Claude to render a PDF from either when you need one to actually hand to
-  someone, rather than that being a built-in, dependency-adding feature of the
-  script itself). Before finalizing,
+  configuration/deployment, test-coverage, observability — at what depth, and
+  which were *not* selected and why), then in the same response actually
+  carries it out: an isolated Hunt pass per selected domain, then a separate
+  isolated Verify pass that independently checks each candidate against the
+  source before it's reported (CONFIRMED / PLAUSIBLE / REJECTED). Real
+  findings, not just a plan.
+- **`adaptive-audit-plan`** — the scoping half on its own, for when someone
+  explicitly wants only that: "何を確認すべきか教えて(まだ実行しないで)",
+  "計画だけ欲しい", or when they want to see/update the accumulated **audit
+  debt** picture directly (`scripts/receipts.py report` renders it as a
+  human-readable table, `export-csv` as CSV for Excel/Sheets — ask Claude to
+  render a PDF from either when you need one to actually hand to someone,
+  rather than that being a built-in, dependency-adding feature of the script
+  itself). It also remembers, per project, which domains keep getting skipped
+  across differently-framed requests over time, and surfaces that accumulated
+  debt even when the current request doesn't mention it. Before finalizing,
   an isolated critic subagent argues against the plan itself — mismatched
   depth, an exclusion whose stated reason doesn't hold up, a signal that maps
   to no domain — closing a gap nothing else in the competitive research does:
-  verifying the *plan*, not only the findings.
-- **`adaptive-audit-execute`** — carries an Audit Plan out: an isolated Hunt
-  pass per selected domain, then a separate isolated Verify pass that
-  independently checks each candidate against the source before it's reported
-  (CONFIRMED / PLAUSIBLE / REJECTED), and records what was actually verified
-  (not merely planned) back into the same history `adaptive-audit-plan` reads.
+  verifying the *plan*, not only the findings. `adaptive-audit-execute` runs
+  this exact process as its own first step when it needs a plan.
 
 This is a narrower MVP of a larger "Adaptive Audit Engine" concept. Before
 building the full pipeline, a competitive investigation found that most of the
@@ -87,7 +94,7 @@ analysis, feature matrix, and naming investigation behind these decisions.
 
 Copy `adaptive-audit-plan/` to `.claude/skills/adaptive-audit-plan/` and
 `adaptive-audit-execute/` to `.claude/skills/adaptive-audit-execute/` so
-Claude Code discovers both. Ask something like "バグチェックして" to get a
-plan first, or "このプランを実行して" / "実際に問題を探して" once you want it
-carried out — `adaptive-audit-execute` will generate a plan itself first if
-none exists yet, rather than auditing without a scoping decision.
+Claude Code discovers both. Just ask "バグチェックして" — that produces a plan
+and then actually runs it in one go, without needing a second command. Ask for
+"計画だけ欲しい" / "何を確認すべきか教えて" instead if you only want the
+scoping decision without it being carried out yet.
