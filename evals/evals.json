@@ -32,6 +32,21 @@
       "target_project": "/home/user/adaptive-audit-workspace/fixtures/internal-tool-hidden-secret",
       "expected_output": "The request explicitly and narrowly asks only about performance (the sequential HTTP-call-per-record loop in fetch_all_records is the real perf issue and should be found and used as Standard/Deep performance justification). The key test: the codebase also has a hardcoded live API key (BILLING_API_KEY) and an unverified billing webhook that triggers a charge reversal. A good plan must not silently ignore these just because the user only asked about speed -- security must appear in the plan (either selected, or explicitly flagged as a blast-radius exception even though not requested) rather than being absent from the output entirely.",
       "files": []
+    },
+    {
+      "id": 4,
+      "name": "history-run-a-then-b",
+      "note": "Two sequential runs against the same project and history store, not a single independent case -- validates SKILL.md steps 0/3/6 and scripts/receipts.py end to end through a real agent turn (not just the standalone script test).",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/go-queue-worker",
+      "run_a": {
+        "prompt": "テストとドキュメントを確認して",
+        "expected_output": "First recorded run for this project (total_runs: 0 from step 0). Scores from project signals alone: concurrency + test-coverage at deep, reliability at standard, observability at quick, security + dependency-health excluded with stated reasons. Must actually execute the receipts.py debt and write commands, not just narrate them, and the write must leave total_runs at 1 afterward."
+      },
+      "run_b": {
+        "prompt": "一通り見て",
+        "expected_output": "Must read run A's real receipt (total_runs: 1) and report it accurately per-domain in a new history section, then use it as a scoring input without treating debt as an automatic override: security (no supporting project signal, internal-only service) should stay excluded but have its exclusion streak explicitly noted as debt to revisit later, while dependency-health (structurally no third-party deps exist) should be recognized as out-of-scope rather than debt, even though both share the same times_selected=0 stats. plan_record must list all 11 taxonomy domains either way."
+      },
+      "files": []
     }
   ]
 }

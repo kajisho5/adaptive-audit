@@ -9,18 +9,22 @@ scoped, risk-aware **Audit Plan** — which audit domains actually matter here
 (security, correctness, performance, reliability, architecture, data-integrity,
 concurrency, dependency-health, configuration/deployment, test-coverage,
 observability), at what depth, and explicitly which domains were *not* selected
-and why.
+and why. It also remembers, per project, which domains keep getting skipped
+across differently-framed requests over time, and surfaces that accumulated
+**audit debt** even when the current request doesn't mention it.
 
 This is a narrower MVP of a larger "Adaptive Audit Engine" concept. Before
 building the full pipeline, a competitive investigation found that most of the
 individual pieces (multi-agent review, evidence-based findings, self-verification)
 already exist in well-established OSS (notably `cloudflare/security-audit-skill`
-and `dinosn/raptor-loop-hunt`), so this repo currently only implements the two
-confirmed white-space pieces, starting with the first:
+and `dinosn/raptor-loop-hunt`), so this repo only implements the two confirmed
+white-space pieces, both now MVP-validated (see `evals/validation-notes.md`):
 
-1. **Domain-agnostic adaptive audit-plan generation** (this repo, MVP validated —
-   see `evals/validation-notes.md`)
-2. Cross-audit-type persistent coverage/audit-debt tracking (not yet built)
+1. **Domain-agnostic adaptive audit-plan generation** (`SKILL.md` steps 1-5)
+2. **Cross-audit-type persistent coverage/audit-debt tracking** (`SKILL.md` steps
+   0/3/6, `scripts/receipts.py`) — modeled on the `Artifact`/`ProductionReceipt`
+   pattern from `kajisho5/AI-video-production-OS`'s `docs/SPEC.md`: one
+   content-addressed record per completed run, kept outside the audited project.
 
 See `research/adaptive-audit-competitive-research.md` for the full competitive
 analysis, feature matrix, and naming investigation behind these decisions.
@@ -30,9 +34,12 @@ analysis, feature matrix, and naming investigation behind these decisions.
 - `SKILL.md` + `references/audit-domains.md` — the skill itself. It only produces
   an Audit Plan; it does not run the audit, dispatch reviewer agents, or report
   findings.
+- `scripts/receipts.py` — stdlib-only Python that reads/writes this skill's local,
+  per-project audit history (used by `SKILL.md` steps 0 and 6). History lives
+  under `~/.adaptive-audit/`, never inside the audited project.
 - `evals/` — synthetic fixture projects, test prompts, and validation notes used to
   check the skill actually scopes adaptively instead of just following a fixed
-  checklist.
+  checklist, and that the audit-debt tracking works across real sequential runs.
 - `research/` — the pre-implementation competitive/differentiation research.
 
 ## Usage
