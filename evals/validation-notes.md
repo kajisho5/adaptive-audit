@@ -785,3 +785,83 @@ shaped invariant extraction, and behavior at obs-studio-scale, remain
 untested). Reference file renamed from `EXPERIMENTAL-invariant-extraction.md`
 to `invariant-extraction.md` to match the status change; `README.md` updated
 to match.
+
+## Iteration 13 — invariant extraction, trial 3 (directed prompt closes the attention-bias gap)
+
+Direct follow-up to iteration 12's own limitation: a generic extraction prompt
+had missed a missing-idempotency bug despite reading the exact vulnerable
+code. Re-ran against the same project's `payment/` subsystem (no prior
+knowledge, as always), this time with the extraction prompt explicitly aimed
+at "duplicate input / state transition / derived-value consistency"
+invariants instead of a generic ask.
+
+**Result: this closed the gap.** The redirected prompt found the missing
+webhook-idempotency issue directly — the same mechanism/severity iteration
+11's `data-integrity` domain had independently confirmed, but this time
+*found* by the invariant pass itself, not merely convergent with something
+else. It also surfaced two genuinely new issues: LemonSqueezy's webhook
+stamps `datePaid` at processing time while Stripe/Polar derive it from the
+event's own timestamp (a real correctness inconsistency no prior pass on this
+project had caught), and a TOCTOU race in Stripe customer creation under
+concurrent checkout requests. Full write-up in
+`adaptive-audit-execute/references/invariant-extraction.md` ("Trial 3").
+
+**Conclusion drawn**: the attention bias iteration 12 surfaced is addressable
+by prompt design (running a differently-lensed extraction pass), not an
+inherent ceiling on the technique — but that in turn means invocation should
+run more than one lens (at minimum authorization/ownership, and
+duplicate-input/state-transition) rather than assume one generic pass covers
+everything, since trial 2 and trial 3's lenses surfaced materially different,
+non-overlapping findings from related code.
+
+## Iteration 14 — invariant extraction, trial 4 (first test at large-C-codebase scale)
+
+The other open gap from iteration 12: no data on how the technique behaves on
+a codebase large and unfamiliar enough that a single read-through can't cover
+it. Run against `obsproject/obs-studio`'s `plugins/obs-outputs/`
+(~20,571 lines of C) — the same real-world target as iteration 9's full
+7-domain audit — again with no knowledge of that audit's findings.
+
+Coverage was disclosed honestly rather than glossed over: only ~20% of the
+codebase was read closely, with entire subsystems (two codec-specific
+bitstream parsers, ~1,500 lines) never opened at all. Within that partial
+coverage: **the technique independently rediscovered iteration 9's two most
+severe confirmed findings** (third independent convergence trial, and the
+first on a large, unfamiliar, memory-unsafe C codebase rather than
+TypeScript/Python) — **and found two additional real, independently-Verified
+issues iteration 9's own `security` Hunt had not surfaced**, sitting in code
+a different domain (`architecture`) had read for an unrelated lens, or that
+no domain's Hunt had examined at all. In aggregate severity, both are at
+least comparable to, and one is more severe than, anything iteration 9 found
+in this subsystem.
+
+**Redacted for the same reason as iteration 9**: full technical detail is not
+published here. Both new findings are independently Verified and have been
+folded into the private disclosure draft prepared for OBS's official
+security contact, with the more severe one promoted to the top of that
+draft.
+
+**The self-honesty check produced a genuinely useful internal signal, not
+just a caveat**: the two invariants the extraction agent itself flagged as
+least concretely grounded (closer to generic hygiene phrased in
+codebase-specific language than tied to a verified repeated pattern) going
+into the checking pass turned out to be exactly the two that were violated
+worst. Weakly-grounded invariants correlating with where real gaps are is
+itself a signal worth designing around in future runs (e.g., treat
+low-grounding invariants as a prioritization cue for where to look hardest,
+not just a confidence caveat to report).
+
+**What this changes about the technique's standing**: this is the single
+most consequential result across all four trials to date — real,
+more-severe-than-previously-known findings in a widely-deployed real
+project, found specifically because the technique isn't scoped by domain the
+way Hunt is. A function one domain's Hunt read for one lens and another
+domain's Hunt never re-read for a different lens fell into exactly the gap
+between domain boundaries that a domain-agnostic invariant pass doesn't have.
+This does not mean the technique scales cleanly to large codebases — only
+~20% was covered — but it means even partial, time-boxed coverage at that
+scale still finds real, high-value things, which is the more defensible and
+more interesting claim. Full standing assessment, and the resulting
+invocation guidance (run multiple lenses; require honest coverage
+disclosure on large codebases), recorded in
+`adaptive-audit-execute/references/invariant-extraction.md`.
