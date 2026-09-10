@@ -660,3 +660,77 @@ this validation — both real projects audited so far (iterations 8-9) predate
 this feature, and the one live fixture run here happened to escalate. Worth
 confirming on the next real-world run that a stop-at-Quick case is disclosed
 correctly in the 実行サマリー and doesn't get mistaken for a full clean result.
+
+## Iteration 11 — first real "typical webapp" (auth + payment + DB) run: `wasp-lang/open-saas`
+
+Closes the gap iteration 7 first identified: every prior real-world run had
+been a CLI tool (ffmpeg-skill), a large C/C++ project (obs-studio), or a small
+synthetic Go fixture — never the auth+payment+DB "typical webapp" shape the
+project's own original synthetic fixture (`webapp-auth-payment`) was modeled
+on. This run picked a real one: `wasp-lang/open-saas` (15.7K GitHub stars, MIT
+licensed, actively-maintained SaaS boilerplate many real production products
+fork directly), scoped to `template/app/` (~10,895 lines: React/Node/Prisma
+via the Wasp framework, 3 supported payment processors, file upload, an admin
+panel). Read-only throughout, true cross-agent isolation, same
+plan→self-critique→Hunt→Verify pipeline, verified via `git status`/`git
+rev-parse` before and after.
+
+This is also the first real-world run to exercise iteration 10's staged
+depth-escalation feature on a genuine audit rather than a demonstration
+fixture. The plan's `test-coverage` domain was assigned Standard depth with
+`depth_confidence: provisional`; its Quick-first pass found 2 candidates and
+correctly escalated, and the escalated Standard pass — seeded with the Quick
+findings — refined and expanded them to 4, adding real severity information
+(concretely, which of 3 supported payment processors have zero test coverage
+of any kind) the Quick pass alone hadn't captured. Still open from iteration
+10: a real-world case of a provisional domain finding nothing at Quick and
+correctly stopping there hasn't been observed yet — this run's one provisional
+domain also escalated.
+
+The plan's self-critique step caught two real defects before Hunt began: a
+domain (`correctness`) whose justification cited a concrete signal that hadn't
+actually been disclosed to the critic (a real signal from the planner's own
+inspection, procedurally omitted rather than fabricated — fixed by stating it
+properly), and a domain (`configuration-deployment`) whose justification
+padded a weak core signal with other undisclosed evidence (fixed by dropping
+the domain and folding its one legitimate observation into `security`
+instead). A third objection — bump `data-integrity` from Standard to Deep
+given how confirmed its evidence already was — was accepted. A fourth
+objection, that `test-coverage`'s Standard depth contradicted its own
+"provisional" confidence label, was examined and rejected: provisional-
+confidence Standard is the intended trigger for staged escalation, which the
+critic prompt hadn't explained — a process lesson (explain the mechanism to
+the critic next time), not a plan defect.
+
+6 domains executed (security/data-integrity Deep, correctness/reliability/
+test-coverage Standard, dependency-health Quick). Of 19 candidates that
+survived to Verify: **18 CONFIRMED, 1 downgraded to PLAUSIBLE, 0 rejected** —
+the highest single-run confirmation rate of any real-world audit so far
+(compare obs-studio's 22/28 with 2 rejected), plausibly because this plan's
+signals came from unusually thorough direct pre-inspection before Hunt began
+rather than pattern-matching alone. Two security candidates were independently
+found by Verify to be *more* severe than the Hunter had scoped them (one
+turned out to have no `context` parameter at all, not just an unchecked one;
+the other chains into an actual delete of a victim's file, not just
+unauthorized listing) — concrete evidence the adversarial-Verify mechanism
+isn't systematically biased toward leniency, since it has now been observed
+doing all three things a real skeptic should: confirming, rejecting (obs-
+studio), and escalating severity (here).
+
+**Redacted for the same reason as prior iterations**: findings include a
+confirmed, unauthenticated file-access bug and a confirmed payment-webhook
+idempotency gap enabling real credit duplication — both have genuine abuse
+potential in a template forked into real billing systems. This repository has
+no `SECURITY.md` of its own; the maintaining team's contact (published on the
+main framework repo) was used to prepare a private disclosure draft instead of
+filing a public issue or publishing detail here.
+
+**Cost** (real, measured): plan self-critique ~56K tokens; Hunt (6 domains
+plus one escalation pass) ~590K tokens; Verify (6 passes) ~408K tokens.
+**Total ≈ 1.05M tokens** for ~10,895 lines across 6 domains at a Quick/Standard/
+Deep mix — the cheapest full real-world audit so far, consistent with
+iteration 9's observation that cost tracks signal/attack-surface density more
+than raw line count: this run's domain selection was unusually tightly
+targeted (every Standard/Deep domain had `depth_confidence: high` except the
+one that used staged escalation), so little Hunt effort was spent on
+low-yield areas.
