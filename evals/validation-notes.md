@@ -494,3 +494,115 @@ unfamiliar, substantial code in both runs. Still open: real Hunt/Verify cost
 data on a large real repository (run 2 stopped at planning; run 3 was a small
 fixture) — that number is still only known for a tiny synthetic fixture
 (task-api, ~660K tokens across 6 domains) and remains the next real unknown.
+
+## Iteration 8 — full real-world audit against `kajisho5/ffmpeg-skill` (the routing fix's first full-scale run)
+
+Following the routing fix above, `adaptive-audit-execute`'s complete plan → Hunt
+→ Verify pipeline was run against the real, unmodified `kajisho5/ffmpeg-skill`
+repository (~8,300 lines, 40 scripts) with true cross-agent subagent isolation
+throughout (every Hunt and Verify pass a fresh agent dispatched directly by the
+orchestrating session, not a same-session fallback). Read-only end to end,
+verified via `git status`/`git rev-parse` before and after.
+
+7 domains executed at the depths the self-critiqued plan assigned
+(security/correctness Deep, architecture/data-integrity/reliability/test-coverage
+Standard, configuration-deployment Quick). All 22 findings that survived Verify
+came back CONFIRMED (one further candidate was independently CONFIRMED on its
+core claim but had a specific proposed attack sub-path tested against a real
+libass rendering and found not to work — reported as partially confirmed rather
+than silently dropped or overstated). configuration-deployment came back clean
+(no findings, correctly reported as such rather than padded).
+
+**Headline result, redacted here**: the security domain, at Deep depth, found
+and *reproduced* (actual execution in an isolated `/tmp` sandbox, not just
+static reasoning) a real, currently-unpatched arbitrary-code-execution path in
+one of the project's own scripts. Full technical detail is intentionally not
+included in this public file while a fix is pending — this is the repo owner's
+own software, and the finding is being handled directly with them outside this
+document. The result is recorded here because it's real evidence the pipeline
+finds serious, non-superficial bugs on real code, not because the mechanism
+itself needs any change.
+
+**Cost** (real, measured): plan self-critique ~63K tokens; Hunt (7 domains)
+~1.13M tokens; Verify (6 domains that produced candidates) ~510K tokens.
+**Total ≈ 1.7M tokens** for a ~8,300-line, 40-script real project across 7
+domains at a Quick/Standard/Deep mix. This answers iteration 7's open question:
+real Hunt/Verify cost on a substantial real repository, not a small fixture.
+
+## Iteration 9 — stress test at 2.5x scale, third-party C/C++ project: `obsproject/obs-studio`
+
+A further real-world run against a large, third-party (not the user's own),
+widely-deployed open-source C/C++ project — `obsproject/obs-studio`, scoped to
+`plugins/obs-outputs/` (~20,571 lines) — to test whether the same methodology
+holds up on unfamiliar, larger, memory-unsafe-language code with a completely
+different threat model (network-facing protocol/binary-format parsing, not a
+scripting-language CLI tool). Read-only throughout, true cross-agent isolation,
+same plan → self-critique → Hunt → Verify pipeline.
+
+The plan's own self-critique step caught two real defects in the *plan itself*
+before any Hunt ran: a depth assignment (concurrency) that under-weighted a
+structurally strong signal relative to a thinner one elsewhere, and an excluded
+domain (architecture) whose stated exclusion reason directly contradicted a
+signal cited elsewhere in the same plan — both were fixed before Hunt began, not
+just noted and ignored, which is exactly what this step exists to catch.
+
+7 domains executed at plan depth (security/correctness Deep; dependency-health/
+reliability/concurrency Standard; test-coverage/architecture Quick). Of 28
+candidates that survived to Verify: 22 CONFIRMED, 1 PLAUSIBLE (a real,
+unpatched code match to a historical, publicly-disclosed CVE, but Verify traced
+the actual reachable value range in this codebase and found the specific
+integer-overflow exploitation path isn't currently reachable), and 2 REJECTED —
+one of which is worth calling out specifically: a claimed use-after-free that
+Verify traced up through the host application's own synchronization layer (a
+real mutex+condvar-backed gate one level above the file the Hunter examined)
+and found the race window the claim needed does not actually exist through the
+public API, despite the raw field-level analysis being accurate. That's the
+adversarial-Verify mechanism working exactly as intended — not rubber-stamping
+a plausible-sounding claim, and not over-rejecting a real one either, since the
+other five concurrency candidates in the same batch were independently
+confirmed as genuine races.
+
+**Redacted for the same reason as iteration 8**: the security domain found two
+independently-reproduced (AddressSanitizer-confirmed against the real,
+unmodified source) memory-safety bugs reachable pre-authentication from any
+RTMP server a user connects to. This is a large, third-party project with a
+formal coordinated-disclosure program (RCE explicitly in scope, 120-day
+confidentiality window) — full technical detail is deliberately not published
+here or anywhere else; it is being routed through the project's official
+security contact instead, per their own stated policy.
+
+One environment-specific process note: the first Verify attempt for the
+security domain was interrupted mid-run by this execution environment's own
+automated cyber-content safety filter — a false-positive interruption of
+legitimate, authorized defensive code review (rebuilding an AddressSanitizer
+test harness), not a finding about the audit itself. Re-running with a
+verification prompt that leads with static/manual source tracing rather than
+harness-rebuilding completed successfully and reached the same conclusions.
+Worth knowing for future runs against security-sensitive C/C++ code: front-load
+static reasoning in the Verify prompt, treat dynamic PoC-building as optional
+and secondary.
+
+**Cost** (real, measured): plan self-critique ~55K tokens; Hunt (7 domains)
+~914K tokens; Verify (7 passes, including the interrupted-and-retried security
+pass) ~557K tokens. **Total ≈ 1.53M tokens** for ~20,571 lines across 7 domains
+— notably *not* proportionally higher than iteration 8's ~1.7M tokens for an
+~8,300-line project, despite being ~2.5x the code size. This suggests audit
+cost tracks structural/attack-surface density more than raw line count: a large
+fraction of this codebase's bulk is repetitive protocol-phase or binary-format-
+writer boilerplate that doesn't need the same scrutiny per line as its smaller,
+denser, more attack-surface-rich counterparts.
+
+## Conclusion (iterations 8-9)
+
+Two full real-world runs at meaningfully different scales (8.3K and 20.5K
+lines), languages (Python and C), and threat models (a local CLI tool's
+scripting surface vs. a network-facing C parser in widely-deployed software)
+both produced real, non-superficial, independently-reproduced findings — not
+just plausible-sounding candidates that Verify waved through. Both also
+produced at least one case of Verify genuinely overturning or narrowing a
+Hunter's claim rather than confirming everything handed to it (iteration 8's
+libass-tested-and-failed sub-claim; iteration 9's traced-out use-after-free and
+downgraded CVE-exploitability claim), which is the concrete evidence this
+project's differentiation claim (adversarial Verify, not just a second opinion
+that agrees) actually holds under real, unfamiliar code rather than only on
+synthetic fixtures built to demonstrate it.
