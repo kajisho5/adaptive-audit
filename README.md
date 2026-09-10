@@ -100,3 +100,30 @@ Claude Code discovers both. Just ask "バグチェックして" — that produce
 and then actually runs it in one go, without needing a second command. Ask for
 "計画だけ欲しい" / "何を確認すべきか教えて" instead if you only want the
 scoping decision without it being carried out yet.
+
+## Cost
+
+**Running this consumes your own Claude Code usage/API budget — whoever's
+session runs the skill pays for that session's tokens, nobody else's.** There
+is no shared backend and no mechanism for cost to land on anyone but the
+person who typed the request. If you install this and run a Deep-depth audit,
+that cost is yours; if someone else installs it from wherever you share it
+and runs their own audit, that cost is theirs.
+
+That cost is real and not small once you're past a Quick check. Measured
+against real, unfamiliar third-party projects (not toy fixtures), a full
+multi-domain audit at Standard/Deep depth has run:
+
+| Project | Size | Domains | Tokens |
+|---|---|---|---|
+| `ffmpeg-skill` | ~8,300 lines | 7 | ~1.7M |
+| `obs-studio` (`plugins/obs-outputs/`) | ~20,571 lines | 7 | ~1.53M |
+| `open-saas` (`template/app/`) | ~10,895 lines | 6 | ~1.05M |
+
+A Quick-only pass, or a plan-only request ("計画だけ欲しい"), costs a small
+fraction of this — the depth you ask for (or that the plan assigns) is what
+drives cost, not project size alone (a large but structurally repetitive
+codebase can cost less than a smaller, denser one — see
+`evals/validation-notes.md` for the full breakdown). If cost matters more
+than thoroughness for a given ask, say so explicitly ("さっと見て" / "軽く
+チェックして") — the plan step reads that as a depth signal.
