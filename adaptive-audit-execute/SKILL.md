@@ -94,6 +94,33 @@ out the same reasoning anchoring both passes the way physical isolation does),
 not a cosmetic one — disclosing it is what lets whoever reads the result decide
 whether that's good enough for their purposes.
 
+Two concrete techniques make this fallback less prone to anchoring than just
+"trying to be skeptical," even though neither fully replaces real isolation:
+
+1. **Strip the candidate down before re-reading it.** Write step 1's candidates
+   to a temp file (outside the project) as the bare JSON shape only — title,
+   file, lines, severity, description, failure_scenario — with none of the
+   hunt's surrounding narrative, confidence language, or "I'm fairly sure
+   this is real because..." reasoning. When step 2 starts, treat that stripped
+   JSON as if it arrived from someone else: re-open the actual source at the
+   cited lines and re-derive CONFIRMED/PLAUSIBLE/REJECTED from scratch, rather
+   than re-reading your own step-1 prose. This mirrors what a truly isolated
+   Verify subagent would receive (SKILL.md step 2 gives it the claim, not the
+   hunter's reasoning) — the fallback can't replicate the separate context
+   window, but it can replicate what information crosses the boundary.
+2. **Batch step 1 across every domain before starting step 2 on any of them**,
+   rather than doing Hunt-then-Verify domain by domain. More turns and more
+   unrelated domains' reasoning between forming a candidate and re-checking it
+   makes it modestly harder for the exact justification to still be live in
+   working context — not a substitute for isolation, but cheap and free to do.
+
+State in the 実行サマリー not just *that* the fallback was used, but *which*
+of these mitigations were actually applied — "same-session fallback, no
+stripping, sequential per domain" is a materially weaker disclosure than
+"same-session fallback with candidate-stripping and full Hunt-before-Verify
+batching," and the reader deciding whether the result is good enough for them
+needs to know which one they got.
+
 Depth controls how far the hunt goes, using each domain's own Quick/Standard/Deep
 definition in the reference file — a Quick security pass is a pattern scan, a
 Deep one attempts safe reproduction; don't apply one uniform depth policy across
