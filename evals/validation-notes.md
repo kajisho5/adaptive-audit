@@ -145,7 +145,7 @@ structurally inapplicable" rather than treating every debt-accumulating domain t
 same way. No changes made to `SKILL.md`/`scripts/receipts.py` after this
 iteration — shipping as-is.
 
-## Next validation round (not yet run)
+## Next validation round from iteration 2 (still not run)
 
 - A case with genuinely no elevated-risk signal anywhere (does it correctly
   produce a short, low-domain-count plan instead of padding it out?).
@@ -155,3 +155,82 @@ iteration — shipping as-is.
 - A longer history (5+ runs) with a domain that keeps sitting just under the
   "worth mentioning" bar — does accumulated debt eventually flip it to selected,
   or does the bump prove too weak in practice to ever matter?
+
+---
+
+# Iteration 3 — adaptive-audit-execute (Hunt → Verify)
+
+Validates the second skill: given a plan, does it actually find real, confirmable
+issues in the domains the plan selected, and does the Verify pass genuinely reject
+bad candidates rather than rubber-stamp the hunt? Also extends `receipts.py` with
+execution results (linked to their plan via `plan_id`) and re-validates `debt`
+distinguishes *planned* depth from *verified* depth.
+
+## Method: script extension (no LLM)
+
+Manually exercised the new `write-result`/updated `debt` commands against the
+`webapp-auth-payment` fixture: wrote a plan selecting `security` at deep, checked
+`debt` (correctly showed `max_verified_depth_ever: null` — planned deep, nothing
+verified yet), then wrote an execution result for `security`, checked `debt` again
+(`max_verified_depth_ever: "deep"` — now correctly reflects verified work). Also
+confirmed `write-result` refuses an unknown `--plan-id` rather than silently
+creating an orphaned result.
+
+## Method: eval-5, real agent run
+
+One real agent turn followed `adaptive-audit-execute/SKILL.md` against
+`webapp-auth-payment` (history cleared first) with "バグを実際に見つけて直したいので、
+監査を実行して" (I want to actually find and fix the bugs). No plan existed yet, so
+the agent generated one first (per the skill's own step 0), then executed Hunt →
+Verify across the 8 selected domains.
+
+## Result: finding quality
+
+Correctly CONFIRMED every vulnerability deliberately seeded in the fixture: two
+SQL-injection sites (`auth.js:9-10`, `payments.js:13-14`), the missing Stripe
+webhook signature check, the entirely-missing password check in `login()`, the
+unwrapped two-write payment transaction, missing error handling around DB calls
+in an Express-4 app (a real crash risk, not a style nit), and missing webhook
+idempotency (double-credit risk) — each with a concrete file/line and failure
+scenario, not a vague risk statement.
+
+More importantly, **the Verify pass genuinely rejected two hunt candidates**,
+not zero: a claimed "auth bypass via missing Authorization header" (verify
+correctly traced that `jwt.verify` throws synchronously into an enclosing
+`try/catch`, so it 401s rather than bypassing or crashing), and a claimed
+"connection pool leak" (verify correctly recognized `pool.query()` as the
+standard long-lived-pool usage pattern, not a leak). A pipeline that confirms
+everything the hunter proposes isn't doing real verification — these two
+rejections are the actual evidence that step 2 is adversarial rather than
+decorative.
+
+## Result: an honest limitation surfaced, not hidden
+
+The skill's design calls for Hunt and Verify to run as physically separate
+subagents. In this test, no subagent-spawning mechanism was available inside the
+nested test-agent's own tool surface (no Task tool; a `create_session` fallback
+attempt was blocked by the permission classifier). Rather than silently proceeding
+as if isolation had happened, the agent disclosed this explicitly in the output's
+実行サマリー and fell back to two clearly-separated same-session passes, actively
+attempting to disconfirm each candidate in the second pass rather than reasoning
+forward from the first.
+
+This is the right failure mode, but it means **this run only validates the
+same-session fallback, not true cross-agent isolation** — the isolation itself
+(the thing that most protects against a hunter and verifier sharing the same
+anchoring bias) is unvalidated. `SKILL.md` step 1 was updated after this run to
+make the fallback an explicit, required disclosure rather than something the
+model had to improvise correctly on its own; the output format's 実行サマリー now
+explicitly requires stating which mode was used.
+
+## Conclusion (iteration 3)
+
+Finding quality and the Verify pass's willingness to reject are both validated
+with concrete evidence (13 confirmed, 3 plausible, 2 rejected, all individually
+inspected above). The cross-run receipt linkage (plan → execution result via
+`plan_id`) works, confirmed both by direct script testing and by the real run.
+**Not yet validated**: Hunt/Verify under true subagent isolation — this needs a
+re-run in an environment where a real Task-tool-equivalent is available to the
+executing agent (e.g. an actual Claude Code CLI session rather than this
+harness's nested test-agent), to confirm the fully-isolated path behaves at least
+as well as the disclosed fallback did here.

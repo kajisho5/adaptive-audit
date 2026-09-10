@@ -54,6 +54,19 @@ same reason it matters in every adversarial-review design that's already proven
 this out: a hunter that already knows what the plan expected to find anchors on
 confirming it, rather than actually looking.
 
+**If no mechanism for real subagent isolation exists in this environment** (no
+Task tool available, or spawning a subagent/session is blocked) — this can happen
+in a nested or restricted execution context — do not silently skip isolation and
+report as if it happened. Instead: say so plainly in the output's 実行サマリー
+section, and still perform steps 1 and 2 as two clearly separated reasoning
+passes within this session — read only that domain's lens in step 1, and in
+step 2 deliberately discard whatever confidence you formed in step 1 and
+re-derive each candidate's status from the source alone, actively trying to
+disprove it rather than confirm it. This is a real degradation (it can't rule
+out the same reasoning anchoring both passes the way physical isolation does),
+not a cosmetic one — disclosing it is what lets whoever reads the result decide
+whether that's good enough for their purposes.
+
 Depth controls how far the hunt goes, using each domain's own Quick/Standard/Deep
 definition in the reference file — a Quick security pass is a pattern scan, a
 Deep one attempts safe reproduction; don't apply one uniform depth policy across
@@ -142,7 +155,9 @@ keep the JSON keys as-is):
 
 ## 実行サマリー
 (overall_status; which domains were executed at which depth vs. what the plan
- asked for; any shortfall from step 3, stated plainly)
+ asked for; any shortfall from step 3, stated plainly; whether Hunt/Verify ran
+ as truly isolated subagents or as the same-session fallback from step 1/2 —
+ never leave this unstated)
 
 ## <domain 1> の結果
 (CONFIRMED findings first, then PLAUSIBLE — each with file:lines, severity,

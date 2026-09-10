@@ -47,6 +47,15 @@
         "expected_output": "Must read run A's real receipt (total_runs: 1) and report it accurately per-domain in a new history section, then use it as a scoring input without treating debt as an automatic override: security (no supporting project signal, internal-only service) should stay excluded but have its exclusion streak explicitly noted as debt to revisit later, while dependency-health (structurally no third-party deps exist) should be recognized as out-of-scope rather than debt, even though both share the same times_selected=0 stats. plan_record must list all 11 taxonomy domains either way."
       },
       "files": []
+    },
+    {
+      "id": 5,
+      "name": "execute-webapp",
+      "skill": "adaptive-audit-execute",
+      "prompt": "バグを実際に見つけて直したいので、監査を実行して",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/webapp-auth-payment",
+      "expected_output": "No plan exists yet, so the skill must generate one first (its own step 0) before executing. Must actually run Hunt then an independent Verify pass per candidate, not just assert findings. Should CONFIRM every deliberately-seeded issue: SQL injection in auth.js and payments.js, missing Stripe webhook signature verification, the entirely-missing password check in login(), the unwrapped two-write payment transaction, missing error handling around DB calls, missing webhook idempotency. Critically, Verify must actually reject at least one hunt candidate that doesn't hold up (proving it isn't rubber-stamping) rather than confirming everything proposed. Must disclose plainly whether Hunt/Verify ran as truly isolated subagents or a same-session fallback -- never silently claim isolation that didn't happen. Must write an execution result via receipts.py write-result linked to the plan's id, and debt afterward must show max_verified_depth_ever populated for executed domains.",
+      "files": []
     }
   ]
 }
