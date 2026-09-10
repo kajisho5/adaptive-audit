@@ -14,7 +14,12 @@ Two Claude Code Skills, meant to be installed together:
   explicitly which domains were *not* selected and why. It also remembers, per
   project, which domains keep getting skipped across differently-framed
   requests over time, and surfaces that accumulated **audit debt** even when
-  the current request doesn't mention it.
+  the current request doesn't mention it (`scripts/receipts.py report` renders
+  this as a human-readable table, not just internal JSON). Before finalizing,
+  an isolated critic subagent argues against the plan itself — mismatched
+  depth, an exclusion whose stated reason doesn't hold up, a signal that maps
+  to no domain — closing a gap nothing else in the competitive research does:
+  verifying the *plan*, not only the findings.
 - **`adaptive-audit-execute`** — carries an Audit Plan out: an isolated Hunt
   pass per selected domain, then a separate isolated Verify pass that
   independently checks each candidate against the source before it's reported
@@ -40,6 +45,21 @@ confirmed white-space pieces, all now MVP-validated (see
 3. **Domain-agnostic Hunt → Verify execution** (`adaptive-audit-execute/SKILL.md`)
    — the general adversarial-review pattern proven by the security-specific
    tools above, re-implemented (not vendored) so it isn't locked to one domain.
+   Validated under true cross-agent isolation (not a same-session fallback) on
+   a fixture whose bugs aren't announced in comments — see
+   `evals/validation-notes.md` iteration 4.
+4. **Audit-plan self-verification** (`adaptive-audit-plan/SKILL.md` step 5) —
+   an isolated critic reviews the plan itself before it ships. Confirmed
+   nothing in the 22+ surveyed competitors does this; existing tools verify
+   findings, not the plan that decided what to look for.
+
+An experimental fifth idea — extracting a project's implied invariants ("a
+task's owner must match the caller") and checking code against them directly,
+rather than only scanning by domain — was tested once with promising but
+early results (`adaptive-audit-execute/references/EXPERIMENTAL-invariant-extraction.md`).
+It's deliberately **not** part of the default pipeline: this was the highest-risk,
+least-proven idea in the original research (essentially unattempted anywhere in
+the ecosystem), and one good run doesn't change that.
 
 See `research/adaptive-audit-competitive-research.md` for the full competitive
 analysis, feature matrix, and naming investigation behind these decisions.

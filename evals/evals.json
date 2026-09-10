@@ -56,6 +56,26 @@
       "target_project": "/home/user/adaptive-audit-workspace/fixtures/webapp-auth-payment",
       "expected_output": "No plan exists yet, so the skill must generate one first (its own step 0) before executing. Must actually run Hunt then an independent Verify pass per candidate, not just assert findings. Should CONFIRM every deliberately-seeded issue: SQL injection in auth.js and payments.js, missing Stripe webhook signature verification, the entirely-missing password check in login(), the unwrapped two-write payment transaction, missing error handling around DB calls, missing webhook idempotency. Critically, Verify must actually reject at least one hunt candidate that doesn't hold up (proving it isn't rubber-stamping) rather than confirming everything proposed. Must disclose plainly whether Hunt/Verify ran as truly isolated subagents or a same-session fallback -- never silently claim isolation that didn't happen. Must write an execution result via receipts.py write-result linked to the plan's id, and debt afterward must show max_verified_depth_ever populated for executed domains.",
       "files": []
+    },
+    {
+      "id": 6,
+      "name": "execute-task-api-true-isolation",
+      "skill": "adaptive-audit-execute",
+      "note": "Orchestrated directly by the top-level session (real Hunt/Verify subagents, one per domain) rather than via a single nested test-agent, to validate true cross-agent isolation after eval-5 could only validate a same-session fallback. Also the with/without-skill comparison for the execution phase (plan-generation already had this in evals 0-3).",
+      "prompt": "このAPIのバグや問題を実際に探して報告して",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/task-api",
+      "expected_output": "Fixture has 6 seeded issues with NO comments announcing them (IDOR, check-then-act race in claim_next, unvalidated status field desyncing from claimed_by, hardcoded JWT secret + internal API key, plaintext passwords, unguarded request.json access). Skill should select 6 domains (security/correctness deep, test-coverage standard, concurrency/dependency-health/reliability quick) and, per domain, run isolated Hunt then isolated Verify. Verify should not confirm everything -- expect at least one REJECTED or downgraded-to-PLAUSIBLE candidate reflecting genuine technical scrutiny (e.g. an atomic operation misidentified as a race, or a claim whose current-code framing doesn't hold even if the underlying pattern is a smell). A no-skill baseline on the same fixture is expected to find most of the obvious issues (this fixture is small) -- the bar is whether the skill's Verify pass does real empirical/technical work (e.g. actually testing a concurrency claim under real thread interleaving) and catches at least one thing the baseline's single-pass narrative review misses.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "name": "plan-self-verification-injected-flaw",
+      "skill": "adaptive-audit-plan",
+      "note": "Tests SKILL.md step 5 directly with a hand-authored (not skill-generated) plan containing two specific, findable flaws, rather than waiting for the skill to happen to make a mistake on its own.",
+      "prompt": "N/A -- a hand-constructed plan + raw signals handed directly to an isolated critic per step 5's instructions, not a natural-language request run through the full pipeline.",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/task-api",
+      "expected_output": "Critic must catch: (1) security assigned 'quick' depth despite signals (IDOR, plaintext passwords) that require logic-level review, not a secrets grep; (2) concurrency excluded with reasoning ('no signal found') that is factually contradicted by a listed signal describing an unsynchronized check-then-act race. Critic should also distinguish this from a third, deliberately softer case (test-coverage excluded because 'not explicitly requested') by flagging it as a debatable policy call rather than a factual error -- proving the mechanism isn't just manufacturing objections indiscriminately.",
+      "files": []
     }
   ]
 }
