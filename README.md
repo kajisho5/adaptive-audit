@@ -60,13 +60,18 @@ confirmed white-space pieces, all now MVP-validated (see
    nothing in the 22+ surveyed competitors does this; existing tools verify
    findings, not the plan that decided what to look for.
 
-An experimental fifth idea — extracting a project's implied invariants ("a
-task's owner must match the caller") and checking code against them directly,
-rather than only scanning by domain — was tested once with promising but
-early results (`adaptive-audit-execute/references/EXPERIMENTAL-invariant-extraction.md`).
-It's deliberately **not** part of the default pipeline: this was the highest-risk,
-least-proven idea in the original research (essentially unattempted anywhere in
-the ecosystem), and one good run doesn't change that.
+A fifth idea — extracting a project's implied invariants ("a task's owner must
+match the caller") and checking code against them directly, rather than only
+scanning by domain — has now been validated across two independent trials
+(a synthetic fixture, then a real ~10,895-line SaaS project), including one
+case of independently rediscovering a real project's most severe confirmed
+finding via a completely different reasoning path, and one case of finding a
+real issue the domain-based pipeline had missed
+(`adaptive-audit-execute/references/invariant-extraction.md`). It's still
+**opt-in, not part of the default pipeline** — this was the highest-risk,
+least-proven idea in the original research, and two successful trials (both
+still scoped to auth/access-control-shaped invariants) is real evidence, not
+yet enough to make it a default step for every run or every domain.
 
 See `research/adaptive-audit-competitive-research.md` for the full competitive
 analysis, feature matrix, and naming investigation behind these decisions.

@@ -353,8 +353,9 @@ object to (a false-positive-rate check, not just a sensitivity check).
 The highest-risk, most novel item from the original research — essentially
 unattempted anywhere in the ecosystem (one 0-star, unused prior attempt).
 Tested once, kept deliberately out of the default pipeline regardless of
-outcome (see `adaptive-audit-execute/references/EXPERIMENTAL-invariant-extraction.md`
-for the full write-up and why it stays experimental).
+outcome (see `adaptive-audit-execute/references/invariant-extraction.md`
+for the full write-up; this trial is trial 1 there, followed up by trial 2
+in iteration 12 below).
 
 ## Result
 
@@ -734,3 +735,53 @@ than raw line count: this run's domain selection was unusually tightly
 targeted (every Standard/Deep domain had `depth_confidence: high` except the
 one that used staged escalation), so little Hunt effort was spent on
 low-yield areas.
+
+## Iteration 12 — invariant extraction, trial 2 (real project, second independent trial)
+
+Follow-up to iteration 6's single trial (a synthetic fixture), addressing the
+three gaps that kept the technique purely experimental: no test at real-
+project scale, no cost data, no false-positive-rate data. Run against the
+same `wasp-lang/open-saas` project as iteration 11, scoped to auth/payment/
+file-upload/user/admin, with the extraction agent given **no knowledge of
+iteration 11's findings**. Full write-up and the resulting graduation
+decision live in `adaptive-audit-execute/references/invariant-extraction.md`
+("Trial 2" section) — summarized here for the audit-log record:
+
+- 12 invariants extracted; 10 HELD, 1 VIOLATED, 1 CONDITIONAL.
+- The VIOLATED invariant independently rediscovered iteration 11's single
+  most severe confirmed finding (the unauthenticated `getDownloadFileSignedURL`)
+  via a completely different reasoning path — the second independent trial
+  (after iteration 6's) showing this technique's candidates converge with
+  domain-based Hunt's on real bugs rather than being unrelated noise.
+- The CONDITIONAL invariant found something iteration 11's `security` domain
+  had missed entirely (Stripe customer lookup-by-email silently reusing a
+  pre-existing customer, crossing billing history under narrow preconditions)
+  — independently Verified as CONFIRMED, real but low-to-medium severity. This
+  is the first concrete "found something domain-based hunting missed" result,
+  not just convergence on what domain-based hunting already would have found.
+- Both non-HELD classifications confirmed real on independent adversarial
+  Verify (0 false positives this trial, `n=2` — real progress on, not closure
+  of, the false-positive-rate gap).
+- Cost: ≈190K tokens total (extract+check ≈120K, verifying the one new claim
+  ≈70K) — for comparison, iteration 11's `security` domain alone (Hunt+Verify,
+  Deep depth, same project) cost ≈213K tokens. Comparable cost to that one
+  domain's own existing process, for independently reconfirming its top
+  finding plus one it missed.
+- A real limitation, not just a caveat: despite reading all three payment
+  webhook handlers in full (the exact code with iteration 11's confirmed
+  missing-idempotency bug), the extraction pass never produced an invariant
+  about duplicate/retried input — it caught the repeated
+  signature-verification pattern across the three files but not the also-
+  repeated missing-idempotency pattern in the same files. The technique has a
+  real attention bias toward whichever structural pattern happens to catch
+  it, not uniform coverage of everything it reads.
+
+**Decision**: promoted from "purely experimental, don't invoke" to a
+**validated opt-in enhancement** — worth reaching for on the `security`
+domain at Standard/Deep depth specifically, still not promoted to a default
+`SKILL.md` step-1 stage for every run/domain (both trials so far are scoped to
+auth/access-control-shaped invariants; correctness/reliability/data-integrity-
+shaped invariant extraction, and behavior at obs-studio-scale, remain
+untested). Reference file renamed from `EXPERIMENTAL-invariant-extraction.md`
+to `invariant-extraction.md` to match the status change; `README.md` updated
+to match.
