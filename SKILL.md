@@ -1,6 +1,6 @@
 ---
 name: adaptive-audit
-description: Produces a scoped, risk-aware Audit Plan for a codebase from a vague or specific natural-language request (e.g. "バグチェックして", "check this for bugs", "review before we ship", "パフォーマンス見て", "セキュリティ確認して"). Instead of running the same generic checklist every time, it inspects the actual project (stack, architecture signals, risk signals, existing tooling, recent changes) and decides which audit domains genuinely matter here — security, correctness, performance, reliability, architecture, data-integrity, concurrency, dependency-health, configuration/deployment, test-coverage, observability — at what depth, and explicitly which domains were NOT selected and why. Use this whenever someone asks for a code check/review/audit without pinning down exactly what to look at, before committing to a review approach, or when the audit's scope itself needs to be justified rather than assumed. This skill only produces the plan artifact — it does not run the audit, dispatch reviewer agents, or report findings. That is a separate, later step.
+description: Produces a scoped, risk-aware Audit Plan for a codebase from a vague or specific natural-language request (e.g. "バグチェックして", "check this for bugs", "review before we ship", "パフォーマンス見て", "セキュリティ確認して"). Instead of running the same generic checklist every time, it inspects the actual project (stack, architecture signals, risk signals, existing tooling, recent changes) and decides which audit domains genuinely matter here — security, correctness, performance, reliability, architecture, data-integrity, concurrency, dependency-health, configuration/deployment, test-coverage, observability — at what depth, and explicitly which domains were NOT selected and why. It also keeps a local, cross-run history per project (outside the project itself) so a domain that keeps getting silently skipped across many differently-framed requests ("audit debt") gets surfaced and prioritized even when the current request doesn't mention it. Use this whenever someone asks for a code check/review/audit without pinning down exactly what to look at, before committing to a review approach, when the audit's scope itself needs to be justified rather than assumed, or when someone wants to know what hasn't been checked recently. This skill only produces the plan artifact — it does not run the audit, dispatch reviewer agents, or report findings. That is a separate, later step.
 ---
 
 # Adaptive Audit — Audit Plan Generator
@@ -23,6 +23,34 @@ The output is always a plan, never findings. Don't audit anything yet, and don't
 launch reviewer subagents — that's intentionally out of scope for this skill.
 
 ## Process
+
+### 0. Check prior audit history for this project
+
+This skill keeps a local, cross-run history *outside* the audited project (never
+inside it — running this skill must never change the target repo's own git
+status). This is what lets it track "audit debt" across different kinds of
+audits over time, not just within one domain repeated on a schedule.
+
+`scripts/receipts.py` lives next to this file (if this file is at
+`/path/to/adaptive-audit/SKILL.md`, the script is at
+`/path/to/adaptive-audit/scripts/receipts.py`). Run, with the project's root path:
+
+```
+python3 <skill-dir>/scripts/receipts.py debt --project-root <project-root>
+```
+
+This prints, per domain that has ever appeared in a past plan for this project:
+how many times it was selected vs. excluded, the deepest it has ever been
+audited, and how many runs it's been since that domain was last audited at
+Deep depth. A domain with a high `runs_since_last_deep` (or that has *never*
+been selected across many runs) has accumulated **audit debt** — it keeps
+getting deprioritized run after run, regardless of what each individual
+request happened to ask about. That is a real risk signal on its own, separate
+from anything found in step 2, and step 3 must factor it in.
+
+If this returns `"total_runs": 0` (or the command errors because no history
+exists yet), say so plainly in the output and proceed — this is expected on a
+project's first run, not a failure.
 
 ### 1. Interpret the request
 
@@ -62,7 +90,7 @@ say so in the output rather than silently assuming it's absent.
 
 Read `references/audit-domains.md` now — it defines the fixed taxonomy of domains,
 what signals make each one relevant, and what "Quick / Standard / Deep" means for
-each. Score every domain using three inputs together:
+each. Score every domain using four inputs together:
 
 1. **Explicit request signal** — did the person name this domain, or words close to it?
 2. **Project signal strength** — how many/how strong are the matching signals from
@@ -71,9 +99,16 @@ each. Score every domain using three inputs together:
    floor bump even without an explicit request, because the cost of skipping them is
    asymmetric. Don't let a purely performance-framed request silently drop a domain
    like this — surface it explicitly instead (see step 4).
+4. **Accumulated audit debt** (from step 0) — a domain with a high
+   `runs_since_last_deep`, or that has repeatedly scored just under the bar and been
+   excluded run after run, gets a bump the same way a blast-radius domain does. A
+   request being framed around something else this time is not a reason to let a
+   long-neglected domain go another run untouched — that is exactly the gap this
+   history exists to close.
 
 Keep the taxonomy fixed across runs (don't invent new domain names ad hoc) — that's
-what will let audit history/coverage be compared across different runs later.
+what makes the debt calculation in step 0 possible at all; a domain that changes
+names between runs looks like it was never audited.
 
 ### 4. Select domains and assign depth
 
@@ -92,18 +127,38 @@ what will let audit history/coverage be compared across different runs later.
 
 ### 5. Output the plan
 
-Use the exact structure in "Output format" below. Write the plan in the same
-language the person used in their request. Do not proceed to run any audit, search
-for actual bugs, or produce findings — stop once the plan is written and hand it
-back for confirmation or for the next phase to consume.
+Use the exact structure in "Output format" below. Write the prose sections in the
+same language the person used in their request; keep the JSON block's keys in
+English regardless (it's for machines, not for reading). Do not proceed to run any
+audit, search for actual bugs, or produce findings — stop once the plan is written.
+
+### 6. Record this run for next time
+
+Write the JSON block from your output to a temp file and run:
+
+```
+python3 <skill-dir>/scripts/receipts.py write --project-root <project-root> <temp-file>
+```
+
+This is what makes step 0 possible on the *next* run against this project. List
+every domain your `domains` array considered — selected **and** excluded — not
+only the ones that made it into the plan; a domain that never appears in any
+receipt looks indistinguishable from a domain nobody ever thought to check, which
+would make the debt calculation meaningless. Do this even on a project's first run
+(with no prior history to read) — that's how the second run gets history to read.
 
 ## Output format
 
-ALWAYS use this exact structure (translate headings to the request's language,
-keep the sections in this order):
+ALWAYS use this exact structure (translate the prose headings to the request's
+language; keep the JSON block's keys as-is):
 
-```
+````
 # Audit Plan
+
+## 過去の監査履歴
+(what step 0 found: total prior runs, and any domain with notable accumulated
+ debt — high runs_since_last_deep, or repeatedly excluded. If total_runs is 0,
+ say this is the first recorded run for this project.)
 
 ## リクエストの解釈
 (what was explicitly asked, what scope/depth was implied, what was left open)
@@ -114,18 +169,44 @@ keep the sections in this order):
 
 ## 選定した監査観点
 (table or list: domain | depth (Quick/Standard/Deep) | why — cite the specific
- signal(s) that drove the score, not just the domain name)
+ signal(s) that drove the score, including debt from step 0 where it applied,
+ not just the domain name)
 
 ## 見送った観点
 (domain | why not selected this run — even if project signals existed)
 
 ## 推奨する実行順序
 (short list — which domain to actually audit first and why, e.g. highest blast
- radius first, or the one the person actually asked about first)
+ radius or highest debt first, or the one the person actually asked about first)
+
+## plan_record (JSON)
+```json
+{
+  "schema_version": "1.0",
+  "request": "<the original request, verbatim>",
+  "domains": [
+    {
+      "domain_id": "<one id from references/audit-domains.md, e.g. \"security\">",
+      "selected": true,
+      "depth": "quick | standard | deep",
+      "reasoning": "<short, same substance as the table above>",
+      "evidence": ["<file:line or short pattern citation>", "..."]
+    }
+  ]
+}
 ```
+````
+
+For an excluded domain in `plan_record`, set `"selected": false` and `"depth":
+null`, but still fill in `reasoning` — that's the field step 0's debt calculation
+and the "見送った観点" section both read.
 
 ## References
 
 - `references/audit-domains.md` — the fixed domain taxonomy, detection signals per
   domain, and what each depth tier means. Read this during step 3, not before —
   it's reference material, not something to memorize up front.
+- `scripts/receipts.py` — reads and writes this project's audit history (used in
+  steps 0 and 6). Stdlib-only Python; run with `python3`, no install needed. Run
+  `python3 <skill-dir>/scripts/receipts.py --help` if the exact flags aren't clear
+  from steps 0/6 above.
