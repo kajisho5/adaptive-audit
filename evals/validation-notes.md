@@ -397,3 +397,100 @@ correct status/depth/count values matching `report`'s own output for the same
 data. A PDF, when actually needed to hand to someone, is left to Claude to
 render from this CSV or from `report`'s text on request, rather than being a
 feature of the script itself.
+
+---
+
+# Iteration 7 — real-world routing test, and a real design bug it found
+
+Two real-world tests against an actual, unrelated published project
+(`kajisho5/ffmpeg-skill`, a working copy with both skills installed under
+`.claude/skills/`, original clone never touched) rather than a synthetic
+fixture — both run by giving an agent only a plain request and a read-only
+constraint, with no mention of "adaptive-audit" or any SKILL.md, to test
+whether the skills are actually discovered and used the way a real user's
+session would, not just when explicitly pointed at.
+
+## Run 1 (before this iteration's fix): a real gap found
+
+Request: "このプロジェクトをバグチェックして。読み取り専用で、絶対にファイルを
+変更・作成・削除しないこと。" The agent found and read `adaptive-audit-plan` on
+its own — skill discovery works — but then **declined to use it**, because its
+mandatory `receipts.py write` step had no way to honor "don't touch anything,"
+and silently ignoring that constraint or violating it were the only two options
+available. It fell back to a manual review instead. The skill fired correctly
+and still contributed nothing to that run.
+
+Fix: added a dry-run mode to both skills (a read-only/no-side-effects request
+skips only the receipt/result-writing steps; the actual scoping and hunt/verify
+work still run and still produce real output) — see the "Addendum" above for
+`export-csv`, which landed around the same time; the dry-run mode itself is
+documented directly in both `SKILL.md` files' step 1/step 0.
+
+## Run 2 (after the dry-run fix): confirms it, and confirms Plan quality on real code
+
+Same request, same project, skills refreshed with the dry-run fix. This time
+the agent actually engaged `adaptive-audit-plan`, correctly declared dry-run
+mode, and produced a plan covering 7 of 11 domains — correctly excluding
+concurrency/performance/dependency-health/observability with real, specific
+reasoning (no threading found anywhere, zero runtime dependencies, no async
+workers). The plan's security selection was grounded in something the domain-
+signal taxonomy couldn't have invented: a filter-graph injection vulnerability
+class **documented in the target project's own code comments** as a previously
+real, fixed defect (`validate_color()`'s docstring) — used as evidence that the
+same defect class might recur elsewhere in ~30 files building similar filter
+strings. The self-critique step (no subagent isolation available, so run as an
+in-context adversarial re-read per the documented fallback) caught a genuine
+gap the initial pass missed: `bin/install.js` deletes and recreates its install
+target non-atomically, evidence neither `correctness` nor `reliability` had
+originally cited. Cost: 147K tokens, 17 tool calls, 0 subagents, ~5.8 minutes,
+for planning only, on a real ~8,300-line, 40-script project.
+
+## The bigger problem this surfaced: the user was right that this shouldn't require two commands
+
+Run 2 stopped after the plan, per `adaptive-audit-execute`'s own description at
+the time, which explicitly told Claude to treat a bare "バグチェックして" as an
+`adaptive-audit-plan`-only case and wait for a separate, explicit "now run it."
+That directly contradicts this project's founding premise (a single
+natural-language request produces a complete audit, no follow-up question
+required) — a two-step "get a plan, then separately ask to run it" flow is
+exactly the configure-then-run friction the project set out to remove, and it
+was reintroduced by a description-level decision made mid-project for
+cost-control reasons, not a limitation of the underlying mechanism (which
+already auto-generates its own plan when none exists).
+
+Fixed by flipping the default: `adaptive-audit-execute` is now the skill a
+bare, unqualified request routes to (see both `SKILL.md` frontmatter
+descriptions); `adaptive-audit-plan` is the explicit-opt-in case for someone
+who specifically wants only the scoping decision. Cost control for the (now
+default) full pipeline is left to the plan's own per-domain depth assignment
+rather than an extra stop-and-ask gate layered on top of it.
+
+## Run 3 — confirms the routing fix, end to end, on a fresh project
+
+New fixture-based project (a copy of `go-queue-worker`, fresh history), bare
+request "バグチェックして", no other signal, both updated skills installed.
+The agent correctly reasoned that `adaptive-audit-execute`'s description now
+names this exact case as its target and that using `adaptive-audit-plan` alone
+would be the wrong choice, then ran the full pipeline in one response: plan →
+Hunt → Verify → both receipts written. Found a real CONFIRMED crash (`fatal
+error: concurrent map writes` from unsynchronized goroutine access — the
+process-ending kind, not a recoverable panic) and a real CONFIRMED missing
+`recover()` around the worker loop, correctly downgraded two speculative
+candidates to PLAUSIBLE, and correctly REJECTED a candidate ("no timeout on
+downstream calls") once it verified the referenced code was an unimplemented
+stub with no downstream call to time out yet — precise, not just permissive,
+skepticism. Cost: 102K tokens, 19 tool calls, ~4 minutes, single response,
+5 domains executed.
+
+## Conclusion (iteration 7)
+
+Both real-world tests did what they were for: found a real, load-bearing design
+gap (no way to honor a legitimate "don't touch anything" request) and a real,
+project-level UX gap (the two-command flow contradicting the founding premise)
+that no synthetic-fixture eval had surfaced, because both gaps are about how
+the skills present themselves and route requests, not about the quality of
+their internal reasoning. The reasoning itself held up well on real,
+unfamiliar, substantial code in both runs. Still open: real Hunt/Verify cost
+data on a large real repository (run 2 stopped at planning; run 3 was a small
+fixture) — that number is still only known for a tiny synthetic fixture
+(task-api, ~660K tokens across 6 domains) and remains the next real unknown.
