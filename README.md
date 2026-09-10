@@ -114,11 +114,14 @@ That cost is real and not small once you're past a Quick check. Measured
 against real, unfamiliar third-party projects (not toy fixtures), a full
 multi-domain audit at Standard/Deep depth has run:
 
-| Project | Size | Domains | Tokens |
+| Language / shape | Size | Domains | Tokens |
 |---|---|---|---|
-| `ffmpeg-skill` | ~8,300 lines | 7 | ~1.7M |
-| `obs-studio` (`plugins/obs-outputs/`) | ~20,571 lines | 7 | ~1.53M |
-| `open-saas` (`template/app/`) | ~10,895 lines | 6 | ~1.05M |
+| Python CLI tool | ~8,300 lines | 7 | ~1.7M |
+| C/C++ network-facing library | ~20,600 lines | 7 | ~1.53M |
+| TypeScript/Node web app | ~10,900 lines | 6 | ~1.05M |
+
+(Project names withheld deliberately — see `evals/validation-notes.md` for
+why some real-world findings from these runs are redacted there too.)
 
 A Quick-only pass, or a plan-only request ("計画だけ欲しい"), costs a small
 fraction of this — the depth you ask for (or that the plan assigns) is what
