@@ -1,0 +1,81 @@
+{
+  "skill_name": "adaptive-audit",
+  "evals": [
+    {
+      "id": 0,
+      "name": "webapp-vague-bugcheck",
+      "prompt": "バグチェックして",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/webapp-auth-payment",
+      "expected_output": "Should treat this as a scoping task, not jump into fixes. Project has JWT auth, a Stripe payment webhook with no signature check, raw SQL string concatenation, and multi-step DB writes with no transaction. Even though the request is vague and names no domain, security and data-integrity should score high and be selected (not just correctness), because of the auth/payment/PII-adjacent blast radius. Plan should cite concrete files/patterns (auth.js, payments.js) as evidence, not just assert 'this looks risky'.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "cli-performance-explicit",
+      "prompt": "パフォーマンス見て",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/cli-data-processor",
+      "expected_output": "Single-user local CLI script, no network/auth/PII signals. Performance should be selected at Deep depth (explicit ask + a real O(n*m) nested-lookup pattern in process.py). Security should score low and be explicitly excluded with a stated reason (no network exposure, no credentials handled) rather than silently omitted or forced in anyway. Existing test only covers the happy path — worth a passing mention but shouldn't hijack the plan away from what was asked.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "go-worker-prerelease",
+      "prompt": "リリース前に一通り見てほしい",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/go-queue-worker",
+      "expected_output": "Internal-only Go queue worker, no HTTP surface or auth. Should pick up: concurrency (unprotected shared map written from multiple goroutines in cache.go) and reliability (no timeout/retry around job processing in worker.go) as high-priority domains. Security should be present but at low depth/lower priority given no external exposure, with the reasoning stated. Should not default to a generic 'check everything at Standard depth' plan just because the request is a vague pre-release ask -- depth should vary per domain based on what was actually found.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "hidden-secret-narrow-ask",
+      "prompt": "レポート生成が遅いので、パフォーマンス改善したい",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/internal-tool-hidden-secret",
+      "expected_output": "The request explicitly and narrowly asks only about performance (the sequential HTTP-call-per-record loop in fetch_all_records is the real perf issue and should be found and used as Standard/Deep performance justification). The key test: the codebase also has a hardcoded live API key (BILLING_API_KEY) and an unverified billing webhook that triggers a charge reversal. A good plan must not silently ignore these just because the user only asked about speed -- security must appear in the plan (either selected, or explicitly flagged as a blast-radius exception even though not requested) rather than being absent from the output entirely.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "history-run-a-then-b",
+      "note": "Two sequential runs against the same project and history store, not a single independent case -- validates SKILL.md steps 0/3/6 and scripts/receipts.py end to end through a real agent turn (not just the standalone script test).",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/go-queue-worker",
+      "run_a": {
+        "prompt": "テストとドキュメントを確認して",
+        "expected_output": "First recorded run for this project (total_runs: 0 from step 0). Scores from project signals alone: concurrency + test-coverage at deep, reliability at standard, observability at quick, security + dependency-health excluded with stated reasons. Must actually execute the receipts.py debt and write commands, not just narrate them, and the write must leave total_runs at 1 afterward."
+      },
+      "run_b": {
+        "prompt": "一通り見て",
+        "expected_output": "Must read run A's real receipt (total_runs: 1) and report it accurately per-domain in a new history section, then use it as a scoring input without treating debt as an automatic override: security (no supporting project signal, internal-only service) should stay excluded but have its exclusion streak explicitly noted as debt to revisit later, while dependency-health (structurally no third-party deps exist) should be recognized as out-of-scope rather than debt, even though both share the same times_selected=0 stats. plan_record must list all 11 taxonomy domains either way."
+      },
+      "files": []
+    },
+    {
+      "id": 5,
+      "name": "execute-webapp",
+      "skill": "adaptive-audit-execute",
+      "prompt": "バグを実際に見つけて直したいので、監査を実行して",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/webapp-auth-payment",
+      "expected_output": "No plan exists yet, so the skill must generate one first (its own step 0) before executing. Must actually run Hunt then an independent Verify pass per candidate, not just assert findings. Should CONFIRM every deliberately-seeded issue: SQL injection in auth.js and payments.js, missing Stripe webhook signature verification, the entirely-missing password check in login(), the unwrapped two-write payment transaction, missing error handling around DB calls, missing webhook idempotency. Critically, Verify must actually reject at least one hunt candidate that doesn't hold up (proving it isn't rubber-stamping) rather than confirming everything proposed. Must disclose plainly whether Hunt/Verify ran as truly isolated subagents or a same-session fallback -- never silently claim isolation that didn't happen. Must write an execution result via receipts.py write-result linked to the plan's id, and debt afterward must show max_verified_depth_ever populated for executed domains.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "name": "execute-task-api-true-isolation",
+      "skill": "adaptive-audit-execute",
+      "note": "Orchestrated directly by the top-level session (real Hunt/Verify subagents, one per domain) rather than via a single nested test-agent, to validate true cross-agent isolation after eval-5 could only validate a same-session fallback. Also the with/without-skill comparison for the execution phase (plan-generation already had this in evals 0-3).",
+      "prompt": "このAPIのバグや問題を実際に探して報告して",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/task-api",
+      "expected_output": "Fixture has 6 seeded issues with NO comments announcing them (IDOR, check-then-act race in claim_next, unvalidated status field desyncing from claimed_by, hardcoded JWT secret + internal API key, plaintext passwords, unguarded request.json access). Skill should select 6 domains (security/correctness deep, test-coverage standard, concurrency/dependency-health/reliability quick) and, per domain, run isolated Hunt then isolated Verify. Verify should not confirm everything -- expect at least one REJECTED or downgraded-to-PLAUSIBLE candidate reflecting genuine technical scrutiny (e.g. an atomic operation misidentified as a race, or a claim whose current-code framing doesn't hold even if the underlying pattern is a smell). A no-skill baseline on the same fixture is expected to find most of the obvious issues (this fixture is small) -- the bar is whether the skill's Verify pass does real empirical/technical work (e.g. actually testing a concurrency claim under real thread interleaving) and catches at least one thing the baseline's single-pass narrative review misses.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "name": "plan-self-verification-injected-flaw",
+      "skill": "adaptive-audit-plan",
+      "note": "Tests SKILL.md step 5 directly with a hand-authored (not skill-generated) plan containing two specific, findable flaws, rather than waiting for the skill to happen to make a mistake on its own.",
+      "prompt": "N/A -- a hand-constructed plan + raw signals handed directly to an isolated critic per step 5's instructions, not a natural-language request run through the full pipeline.",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/task-api",
+      "expected_output": "Critic must catch: (1) security assigned 'quick' depth despite signals (IDOR, plaintext passwords) that require logic-level review, not a secrets grep; (2) concurrency excluded with reasoning ('no signal found') that is factually contradicted by a listed signal describing an unsynchronized check-then-act race. Critic should also distinguish this from a third, deliberately softer case (test-coverage excluded because 'not explicitly requested') by flagging it as a debatable policy call rather than a factual error -- proving the mechanism isn't just manufacturing objections indiscriminately.",
+      "files": []
+    }
+  ]
+}
