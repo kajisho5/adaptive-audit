@@ -1,6 +1,6 @@
 ---
 name: adaptive-audit-execute
-description: Actually executes an Audit Plan produced by the adaptive-audit-plan skill — runs a Hunt-then-Verify pass per selected domain (an isolated agent looks for concrete issues, then a separate isolated agent independently checks each candidate against the source before it's reported) and produces confirmed findings, not just a plan. Use this when someone has already seen an Audit Plan and wants it carried out, or explicitly asks to actually find/fix problems rather than just get a plan (e.g. "このプランを実行して", "実際に脆弱性を探して", "見つかった問題を直して", "run the audit", "find the actual bugs, not just a plan"). If no plan exists yet for this request, this skill produces one first (by following adaptive-audit-plan's own process) rather than auditing without a scope decision. Do not use this for a first vague ask like "バグチェックして" with no other signal that the person wants execution, not just scoping — that should get a plan on its own first (adaptive-audit-plan), which this skill can then be asked to carry out.
+description: Actually executes an Audit Plan produced by the adaptive-audit-plan skill — runs a Hunt-then-Verify pass per selected domain (an isolated agent looks for concrete issues, then a separate isolated agent independently checks each candidate against the source before it's reported) and produces confirmed findings, not just a plan. Use this when someone has already seen an Audit Plan and wants it carried out, or explicitly asks to actually find/fix problems rather than just get a plan (e.g. "このプランを実行して", "実際に脆弱性を探して", "見つかった問題を直して", "run the audit", "find the actual bugs, not just a plan"). If no plan exists yet for this request, this skill produces one first (by following adaptive-audit-plan's own process) rather than auditing without a scope decision. Never audits the target project's own files — reads only, and any reproduction/PoC work happens outside the project directory. Respects an explicit read-only/dry-run request (skips writing the execution result; the audit itself still runs and still reports real findings) rather than treating "don't touch anything" as a reason to decline the whole audit. Do not use this for a first vague ask like "バグチェックして" with no other signal that the person wants execution, not just scoping — that should get a plan on its own first (adaptive-audit-plan), which this skill can then be asked to carry out.
 ---
 
 # Adaptive Audit — Plan Executor
@@ -29,12 +29,24 @@ was judged worth doing rather than reused wholesale.
 
 ### 0. Get a plan to execute
 
+Check whether the request carries a read-only / no-side-effects / dry-run
+constraint (see adaptive-audit-plan's step 1 for the same signal — same
+wording patterns apply here). If so, this whole run is in **dry-run mode**:
+carry that forward into every step below that writes anything. Dry-run changes
+*what gets written*, never *what gets investigated* — the hunt and verification
+work happen exactly as normal and still produce real findings; only the
+receipt-writing steps are affected. A request to not touch anything is a reason
+to skip *writes*, not a reason to decline the audit itself.
+
 Look for a `plan_record` (the JSON block adaptive-audit-plan produces) and its
 receipt id (the path `receipts.py write` printed, or the `id` field inside the
 written receipt file) already available in this conversation. If neither exists
 yet, produce one now by following `../adaptive-audit-plan/SKILL.md`'s process in
-full (including its own step 6, writing the plan receipt) before continuing —
-never audit without going through the scoping step, even under time pressure.
+full — including its own step 7 (writing the plan receipt), unless this run is
+in dry-run mode, in which case that nested run skips its step 7 the same way a
+standalone adaptive-audit-plan invocation would. Never audit without going
+through the scoping step, even under time pressure, and even in dry-run mode:
+skipping *writes* is not the same thing as skipping the plan.
 
 Once you have a plan, only its **selected** domains (`selected: true`) get
 executed, in the plan's stated execution order. Excluded domains stay excluded —
@@ -70,7 +82,13 @@ whether that's good enough for their purposes.
 Depth controls how far the hunt goes, using each domain's own Quick/Standard/Deep
 definition in the reference file — a Quick security pass is a pattern scan, a
 Deep one attempts safe reproduction; don't apply one uniform depth policy across
-domains.
+domains. Whatever depth calls for, this skill reads the target project but never
+writes to it: a Deep-depth reproduction attempt (a sandboxed server instance, a
+stress-test script, a PoC) runs from outside the project directory — write any
+temp files it needs under `/tmp` or similar, never inside the project being
+audited. This holds regardless of dry-run mode; dry-run only changes whether
+this skill's own receipt/result get written, not whether the target project's
+own files are ever touched (they never are, either way).
 
 Instruct the hunter to output candidates in this shape, one per issue, and to
 resist padding the list — a domain with nothing wrong should come back with an
@@ -129,9 +147,17 @@ only low-severity CONFIRMED or any PLAUSIBLE findings exist, PASS if every
 executed domain came back clean, UNKNOWN if nothing was actually executed (step
 3 found a shortfall covering everything).
 
-### 5. Record the outcome
+### 5. Record the outcome — unless step 0 found a dry-run constraint
 
-Write a result JSON (schema below) to a temp file and run:
+**In dry-run mode, skip this step entirely** — no result JSON, no temp file, no
+`write-result` call. State plainly in the 実行サマリー that this execution was
+not recorded, so the next run's debt calculation won't show this domain as
+verified even though it genuinely was this time. That's the same known,
+disclosed tradeoff as adaptive-audit-plan's own dry-run mode, not a gap unique
+to this skill.
+
+Otherwise, write a result JSON (schema below) to a temp file (outside the
+target project, as always) and run:
 
 ```
 python3 <skill-dir>/scripts/receipts.py write-result --project-root <project-root> --plan-id <plan-receipt-id> <temp-file>
@@ -157,7 +183,8 @@ keep the JSON keys as-is):
 (overall_status; which domains were executed at which depth vs. what the plan
  asked for; any shortfall from step 3, stated plainly; whether Hunt/Verify ran
  as truly isolated subagents or as the same-session fallback from step 1/2 —
- never leave this unstated)
+ never leave this unstated; whether this run is in dry-run mode and, if so,
+ that the result was not recorded — never leave that unstated either)
 
 ## <domain 1> の結果
 (CONFIRMED findings first, then PLAUSIBLE — each with file:lines, severity,

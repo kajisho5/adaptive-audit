@@ -1,6 +1,6 @@
 ---
 name: adaptive-audit
-description: Produces a scoped, risk-aware Audit Plan for a codebase from a vague or specific natural-language request (e.g. "バグチェックして", "check this for bugs", "review before we ship", "パフォーマンス見て", "セキュリティ確認して"). Instead of running the same generic checklist every time, it inspects the actual project (stack, architecture signals, risk signals, existing tooling, recent changes) and decides which audit domains genuinely matter here — security, correctness, performance, reliability, architecture, data-integrity, concurrency, dependency-health, configuration/deployment, test-coverage, observability — at what depth, and explicitly which domains were NOT selected and why. It also keeps a local, cross-run history per project (outside the project itself) so a domain that keeps getting silently skipped across many differently-framed requests ("audit debt") gets surfaced and prioritized even when the current request doesn't mention it. Use this whenever someone asks for a code check/review/audit without pinning down exactly what to look at, before committing to a review approach, when the audit's scope itself needs to be justified rather than assumed, or when someone wants to know what hasn't been checked recently. This skill only produces the plan artifact — it does not run the audit, dispatch reviewer agents, or report findings. That is a separate, later step.
+description: Produces a scoped, risk-aware Audit Plan for a codebase from a vague or specific natural-language request (e.g. "バグチェックして", "check this for bugs", "review before we ship", "パフォーマンス見て", "セキュリティ確認して"). Instead of running the same generic checklist every time, it inspects the actual project (stack, architecture signals, risk signals, existing tooling, recent changes) and decides which audit domains genuinely matter here — security, correctness, performance, reliability, architecture, data-integrity, concurrency, dependency-health, configuration/deployment, test-coverage, observability — at what depth, and explicitly which domains were NOT selected and why. It also keeps a local, cross-run history per project (outside the project itself) so a domain that keeps getting silently skipped across many differently-framed requests ("audit debt") gets surfaced and prioritized even when the current request doesn't mention it. Use this whenever someone asks for a code check/review/audit without pinning down exactly what to look at, before committing to a review approach, when the audit's scope itself needs to be justified rather than assumed, or when someone wants to know what hasn't been checked recently. Respects an explicit read-only/dry-run request (no history gets recorded for that run, and it says so) rather than treating "don't touch anything" as a reason to skip this skill entirely. This skill only produces the plan artifact — it does not run the audit, dispatch reviewer agents, or report findings. That is a separate, later step.
 ---
 
 # Adaptive Audit — Audit Plan Generator
@@ -58,6 +58,15 @@ Note, without over-fitting to exact wording:
 - Any audit domain(s) explicitly named (security, perf, etc. — in any language)
 - Any explicit scope (whole project vs. a diff/path/feature)
 - Any explicit depth/urgency cue ("さっと見て" vs "徹底的に" vs "リリース前")
+- **Any read-only / no-side-effects constraint** ("読み取り専用で", "ファイルを一切
+  変更・作成・削除しないで", "dry-run", "don't touch anything", "just look, don't
+  write anything") — if present, this run is in **dry-run mode**: skip step 7
+  (recording the receipt) entirely rather than either violating the constraint or
+  quietly ignoring it. Say so plainly in the output (see "Output format"). A
+  constraint like this is exactly the kind of thing that otherwise causes a
+  reasonable-but-wrong outcome — silently skipping this whole skill instead of
+  just skipping its one side-effecting step — so treat it as a normal mode to
+  support, not an edge case to work around.
 
 Treat this as a hint, not a ceiling. A request that only names one domain doesn't mean
 other domains are off-limits — see step 4.
@@ -166,9 +175,21 @@ same language the person used in their request; keep the JSON block's keys in
 English regardless (it's for machines, not for reading). Do not proceed to run any
 audit, search for actual bugs, or produce findings — stop once the plan is written.
 
-### 7. Record this run for next time
+### 7. Record this run for next time — unless step 1 found a dry-run constraint
 
-Write the JSON block from your output to a temp file and run:
+**In dry-run mode, skip this step entirely.** Do not write to a temp file
+outside the project either — the point of dry-run is no filesystem side effects
+from this run, not just none *inside* the project. State plainly in the output
+that this run was not recorded, and that debt tracking on the *next* run
+against this project won't reflect it. This is a real, known cost of dry-run
+mode, not a detail to gloss over: a project audited repeatedly in dry-run mode
+will never show reduced debt for the domains it covered, because nothing was
+ever written down. That's the honest tradeoff for guaranteeing no side effects,
+not a bug in the mechanism.
+
+Otherwise, write the JSON block from your output to a temp file (outside the
+target project — e.g. under `/tmp`, never inside the project being audited,
+dry-run or not) and run:
 
 ```
 python3 <skill-dir>/scripts/receipts.py write --project-root <project-root> <temp-file>
@@ -188,11 +209,14 @@ language; keep the JSON block's keys as-is):
 
 ````
 # Audit Plan
+(if step 1 found a dry-run/read-only constraint, say so in one line right here,
+ before any other section: this run will not be recorded, and why)
 
 ## 過去の監査履歴
 (what step 0 found: total prior runs, and any domain with notable accumulated
  debt — high runs_since_last_deep, or repeatedly excluded. If total_runs is 0,
- say this is the first recorded run for this project.)
+ say this is the first recorded run for this project. Reading history is safe
+ in dry-run mode too — only step 7's write is skipped, not step 0's read.)
 
 ## リクエストの解釈
 (what was explicitly asked, what scope/depth was implied, what was left open)
