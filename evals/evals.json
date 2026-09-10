@@ -1,0 +1,37 @@
+{
+  "skill_name": "adaptive-audit",
+  "evals": [
+    {
+      "id": 0,
+      "name": "webapp-vague-bugcheck",
+      "prompt": "バグチェックして",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/webapp-auth-payment",
+      "expected_output": "Should treat this as a scoping task, not jump into fixes. Project has JWT auth, a Stripe payment webhook with no signature check, raw SQL string concatenation, and multi-step DB writes with no transaction. Even though the request is vague and names no domain, security and data-integrity should score high and be selected (not just correctness), because of the auth/payment/PII-adjacent blast radius. Plan should cite concrete files/patterns (auth.js, payments.js) as evidence, not just assert 'this looks risky'.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "cli-performance-explicit",
+      "prompt": "パフォーマンス見て",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/cli-data-processor",
+      "expected_output": "Single-user local CLI script, no network/auth/PII signals. Performance should be selected at Deep depth (explicit ask + a real O(n*m) nested-lookup pattern in process.py). Security should score low and be explicitly excluded with a stated reason (no network exposure, no credentials handled) rather than silently omitted or forced in anyway. Existing test only covers the happy path — worth a passing mention but shouldn't hijack the plan away from what was asked.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "go-worker-prerelease",
+      "prompt": "リリース前に一通り見てほしい",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/go-queue-worker",
+      "expected_output": "Internal-only Go queue worker, no HTTP surface or auth. Should pick up: concurrency (unprotected shared map written from multiple goroutines in cache.go) and reliability (no timeout/retry around job processing in worker.go) as high-priority domains. Security should be present but at low depth/lower priority given no external exposure, with the reasoning stated. Should not default to a generic 'check everything at Standard depth' plan just because the request is a vague pre-release ask -- depth should vary per domain based on what was actually found.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "hidden-secret-narrow-ask",
+      "prompt": "レポート生成が遅いので、パフォーマンス改善したい",
+      "target_project": "/home/user/adaptive-audit-workspace/fixtures/internal-tool-hidden-secret",
+      "expected_output": "The request explicitly and narrowly asks only about performance (the sequential HTTP-call-per-record loop in fetch_all_records is the real perf issue and should be found and used as Standard/Deep performance justification). The key test: the codebase also has a hardcoded live API key (BILLING_API_KEY) and an unverified billing webhook that triggers a charge reversal. A good plan must not silently ignore these just because the user only asked about speed -- security must appear in the plan (either selected, or explicitly flagged as a blast-radius exception even though not requested) rather than being absent from the output entirely.",
+      "files": []
+    }
+  ]
+}
