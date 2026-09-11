@@ -9,19 +9,25 @@ the previous tag).
 published to npm, PyPI, or any public Claude Code plugin marketplace
 listing — bumping `VERSION` here doesn't push anything out on its own, and
 someone who installed via a plain `.claude/skills/` copy (see README
-"Usage") still has to re-copy by hand. It mainly gives this project's own
+"Install") still has to re-copy by hand. It mainly gives this project's own
 history a stable marker to refer to (in this file, in issues, in
 conversation) instead of a bare commit hash.
 
 Since 0.1.0, this repo can also be self-hosted as a personal/third-party
 Claude Code marketplace (`.claude-plugin/marketplace.json` — see README
-"Install as a plugin"), which *does* give an installed copy a real update
+"Install"), which *does* give an installed copy a real update
 path (`/plugin marketplace update`). Keep that file's plugin `version`
 field in sync with this one — `tests/test_versioning.py` enforces it.
 
 ## [Unreleased]
 
-Nothing yet.
+- README rewritten end to end in the structure/style of `kajisho5/ffmpeg-skill`'s
+  README (badges, a one-line tagline, a mermaid architecture diagram, a
+  domain-taxonomy table, a "Validated so far" results table, an inline TOC) —
+  no content dropped, only restructured: every existing caveat (Cost, the
+  honest competitive comparison, the Remediate/invariant-extraction opt-in
+  disclosures) carries over, condensed into scannable tables where the prose
+  form was previously the only option.
 
 ## [0.1.1] - 2026-09-11
 
