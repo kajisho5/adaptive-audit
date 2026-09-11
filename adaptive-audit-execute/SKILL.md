@@ -377,9 +377,13 @@ writing a single line, work out whether this session can write to the target
 project's files at all, and — only if a PR/push was actually requested — whether
 it can push to or open a PR against that specific remote (this can differ
 sharply from local write access: a session can freely edit a local checkout of
-a project it has no push credentials for at all). State this plainly, up front,
-before doing any work: what this step can and cannot do for the destination the
-person actually asked for. This is not a formality — discovering a missing push
+a project it has no push credentials for at all). State this plainly, **as its
+own message sent before any file is touched** — not folded into the final
+report alongside the finished fix, which defeats the point of surfacing a
+constraint early. What this step can and cannot do for the destination the
+person actually asked for needs to reach them while there's still a choice to
+make, not as a footnote after the work is already done. This is not a
+formality — discovering a missing push
 credential *after* fixes are already written, and only then improvising a
 workaround (spawning other sessions, asking the person to manually fork from a
 phone, etc.), turns a small fix into a long, confusing, multi-step ordeal for
@@ -393,6 +397,12 @@ have caught this specific bug, then run the project's *existing* test suite (not
 only the new test) to confirm nothing else broke. A finding whose fix can't be
 validated this way (no test runner available, the fix is config/infra rather
 than code) should say so plainly rather than silently skip verification.
+For a performance/complexity finding specifically, "a test that would have
+caught this" rarely means a timing assertion (flaky, environment-dependent) —
+prefer a structural regression test that would fail if the fix were reverted
+(e.g. asserting the old per-item code path is no longer called, or that call
+counts to an expensive operation stay bounded), and only fall back to an
+actual timing comparison when no such structural signal exists.
 
 **6.4 Never commit or push without being asked to, and never overclaim what
 happened.** Writing the fix to the working tree is what a plain "直して"

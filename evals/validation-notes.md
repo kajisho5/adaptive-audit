@@ -1050,6 +1050,65 @@ feature is about, and mixing the two was rejected on that basis alone.
 
 Documentation-only change — not yet validated against a real project.
 
+## Iteration 20 — opt-in Remediate step (`adaptive-audit-execute` step 6), validated with a real trial
+
+Added a new opt-in step 6 ("Remediate") triggered only by a separate,
+explicit follow-up request after an audit ("直して", "直してPRにして") —
+never inferred from a finding's severity or the audit's own
+`overall_status`. Unlike iteration 17's step 4.5, this one writes to the
+target project's actual code, not just a report file, so it went through
+a real trial rather than shipping as a documentation-only change.
+
+**Method.** A fresh, isolated subagent was given: the exact SKILL.md step 6
+text, one synthetic CONFIRMED finding (the real O(n·m) full-table-rescan
+pattern in `evals/fixtures/cli-data-processor/process.py`, already used by
+eval-1 in `evals.json`), and the simulated follow-up "直して" with nothing
+else asked. It ran against a disposable git-tracked copy of the fixture
+(never the fixture itself — `evals/fixtures/**` stays frozen per
+`CONTRIBUTING.md`), instructed to follow step 6 literally and report in
+full detail, including friction points, not just a success summary.
+
+**Result: the fix itself was solid.** The subagent replaced the per-row
+`enrich_row` loop in `main()` with a single vectorized `pd.merge` (O(n+m)
+instead of O(n·m)), correctly preserved `enrich_row`'s original "first
+match wins" behavior for duplicate lookup ids via `drop_duplicates`, left
+`enrich_row` itself untouched (still exercised by the pre-existing test, and
+removing it would have been a drive-by change beyond what the finding
+described), added a real regression test (a call-counting spy on
+`enrich_row` asserting zero calls from `main()`, not a flaky timing
+assertion), and ran the full suite (3 tests, including the untouched
+original) — all passing. Benchmarked directly: 1.695s → 0.003s at n=m=4000
+rows, ~500x, confirming the fix actually addresses the finding's
+`failure_scenario` rather than just plausibly sounding like it does.
+`git status` after the run confirmed nothing was staged or committed, as
+step 6.4 requires for a plain "直して" with no further request.
+
+**Two real gaps this trial found in step 6's own wording, both fixed
+directly in `SKILL.md` from this trial's evidence, not speculatively:**
+
+1. **Step 6.2's "state this plainly, up front" was satisfiable by writing
+   it into the final report instead of sending it before starting work** —
+   the subagent did state the write/push-access check, but only as part of
+   its end-of-task narrative, defeating the actual purpose (letting the
+   person redirect before time is spent). Fixed: 6.2 now says explicitly
+   that this must be its own message sent *before any file is touched*,
+   not folded into the completion report.
+2. **"Add a test that would have caught this bug" (6.3) doesn't obviously
+   apply to a performance/complexity finding** — there's no single
+   assertion that "catches" O(n·m) growth the way there is for a
+   correctness bug, and a timing-based test is flaky. The subagent resolved
+   this on its own judgment (a structural regression test instead of a
+   timing one) and flagged that SKILL.md didn't actually say to do this.
+   Fixed: 6.3 now states the preference explicitly (structural regression
+   test over a timing assertion for performance/complexity findings)
+   instead of leaving it to be independently rediscovered on every run.
+
+**Not yet validated**: a trial where push/PR access is actually requested
+and actually absent (this trial's scenario never asked for it, so 6.2's
+push-specific branch and 6.4's "PR opened: no" reporting path went
+untested); a trial fixing more than one finding at once; a trial against a
+finding in a language/toolchain other than Python.
+
 ## Iteration 18 — self-hosted plugin marketplace, closing the actual gap the version-bookkeeping addition (iteration 16-17-adjacent) didn't
 
 Iteration 17's `VERSION`/`CHANGELOG.md`/`release.yml` addition was explicit

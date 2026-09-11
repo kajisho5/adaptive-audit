@@ -34,6 +34,16 @@ field in sync with this one — `tests/test_versioning.py` enforces it.
   STALE/AGING thresholds (3/2 runs) are a disclosed, uncalibrated heuristic,
   not a measured constant — a prior gap where the reasoning existed only in
   a reviewer's head, not in the code.
+- `adaptive-audit-execute` step 6 (Remediate) validated with a real subagent
+  trial against a disposable copy of the `cli-data-processor` fixture (see
+  `evals/validation-notes.md` iteration 20) — the fix itself worked
+  correctly (O(n·m) → O(n+m), ~500x faster, verified with a benchmark and a
+  new regression test, nothing staged or committed). The trial found two
+  real wording gaps, both fixed directly in `SKILL.md` from that evidence:
+  6.2's "state this up front" is now explicit that it must be its own
+  message sent before any file is touched, not folded into the completion
+  report; 6.3 now says to prefer a structural regression test over a flaky
+  timing assertion for performance/complexity findings specifically.
 - `adaptive-audit-execute`: a new opt-in Remediate step (step 6), triggered
   only by a separate, explicit follow-up request after an audit ("直して",
   "直してPRにして") — never inferred from a finding's severity or an audit's
