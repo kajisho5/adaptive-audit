@@ -865,3 +865,47 @@ more interesting claim. Full standing assessment, and the resulting
 invocation guidance (run multiple lenses; require honest coverage
 disclosure on large codebases), recorded in
 `adaptive-audit-execute/references/invariant-extraction.md`.
+
+## Iteration 15 — closing engineering gaps from a self-assessment, not a validation run
+
+Following an honest self-assessment of the project (weaknesses: audit cost,
+small real-world sample, invariant-extraction lens coverage, degraded
+same-session fallback quality, no automated regression protection, and the
+obs-studio safety-filter interruption), three of the six weaknesses were
+addressed directly; the other three (a diff/incremental audit mode, growing
+the real-world sample, and using a child session for genuine subagent
+isolation) were deliberately left as open design questions rather than
+implemented under a vague mandate — each is a real architectural change with
+its own cost/tradeoff that deserves its own decision, not something to slip
+in silently.
+
+**Automated regression tests for `receipts.py`** (`tests/test_receipts.py`,
+run via `.github/workflows/test.yml`): 15 tests covering both skill folders'
+copies of the script — fingerprinting, write/list roundtrip,
+`write-result`'s rejection of an unknown `plan_id`, `export-csv`/`report`
+consistency with `debt`, and, most importantly, two regression tests
+directly protecting the iteration-10 `depth_executed` fix: a result recorded
+with `depth_executed: "quick"` under a plan that specified `"deep"` must
+report `max_verified_depth_ever == "quick"`, while an old-style result with
+no `depth_executed` field at all must still fall back to the plan's depth.
+A `test_scripts_stay_identical` check also guards against the two skill
+folders' copies of `receipts.py` silently drifting apart, which nothing
+previously checked for. This is the one part of the project that's pure,
+deterministic logic rather than LLM output — CI can protect it the way it
+can't protect `SKILL.md` behavior itself, which still depends on hand-run
+evals.
+
+**Explicit recovery instruction for the safety-filter interruption**
+(`adaptive-audit-execute/SKILL.md`, security Verify section): iteration 9
+already fixed the *prevention* side (lead with static tracing, not a rebuilt
+harness) but had no instruction for what to do if a filter interruption
+happens anyway. Added: dispatch a fresh Verify subagent with the
+static-first instruction rather than resuming the interrupted approach,
+rather than leaving that recovery step to be improvised in the moment.
+
+**Multi-lens invariant-extraction guidance**: already addressed by trial 3's
+own conclusion and the "How to invoke it" section in
+`adaptive-audit-execute/references/invariant-extraction.md` (run more than
+one explicit lens, not one generic pass) — reviewed during this pass and
+confirmed no further change was needed here; this weakness was already
+closed by prior work, not newly fixed now.

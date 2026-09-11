@@ -91,6 +91,11 @@ analysis, feature matrix, and naming investigation behind these decisions.
   used to check both skills behave as intended, including across real
   sequential runs.
 - `research/` — the pre-implementation competitive/differentiation research.
+- `tests/` — automated pytest regression tests for `scripts/receipts.py`
+  (run in CI via `.github/workflows/test.yml`). This is the one part of the
+  project that's pure, deterministic logic rather than LLM output, so it's
+  the one part an automated test suite can actually protect — `SKILL.md`
+  behavior itself is still checked by hand-run evals in `evals/`, not CI.
 
 ## Usage
 
