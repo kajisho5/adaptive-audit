@@ -61,11 +61,11 @@ The agent inspects the project, scores all 11 domains, runs `adaptive-audit-plan
 
 Want the plan without running it? Ask for that instead:
 
-> "何を確認すべきか教えて、まだ実行しないで" / "what should we look at, don't actually check yet"
+> "what should we look at, don't actually check yet" / "何を確認すべきか教えて、まだ実行しないで"
 
 Found something you want fixed? Ask separately, after the findings exist:
 
-> "直して" / "fix the confirmed findings"
+> "fix the confirmed findings" / "直して"
 
 This runs the opt-in **Remediate** step (see [below](#remediate-opt-in)) — never assumed from a request's severity, always a second, explicit ask.
 
