@@ -54,6 +54,98 @@ If this returns `"total_runs": 0` (or the command errors because no history
 exists yet), say so plainly in the output and proceed — this is expected on a
 project's first run, not a failure.
 
+### 0.4. Make sure the local checkout is actually current
+
+Every downstream step — signal inspection, domain scoring, and especially
+step 0.5's diff sizing just below — assumes the local working tree reflects
+the code that actually matters right now. A local clone that's behind its
+remote quietly breaks that assumption: the plan gets built against stale
+code, and step 0.5's diff-mode decision could look at the wrong (too small,
+or entirely wrong) set of changes without anyone noticing. Run this before
+step 0.5, not after — there's no point sizing a diff against a HEAD that
+might not be current yet.
+
+If this is a git repository with a configured remote, run `git fetch` (not
+`git pull`) and compare local `HEAD` against the corresponding remote-
+tracking branch. `git fetch` never touches the working tree or any tracked
+file, so it doesn't conflict with this skill never writing to the audited
+project's own files. `git pull` would touch the working tree, so never run
+it automatically here, even to "help."
+
+**In dry-run mode, skip the `git fetch` call itself** — it does write inside
+the project's own `.git/` directory (updated remote-tracking refs,
+`FETCH_HEAD`), which is a real side effect even though it never touches a
+tracked file, and dry-run mode's promise is no side effects on the target
+repo at all. Instead, compare local `HEAD` against whatever remote-tracking
+ref already happens to exist locally (which may itself be stale) and
+disclose plainly that freshness could not be actively verified this run
+because of the read-only constraint — the same honest tradeoff dry-run mode
+already makes everywhere else in this skill.
+
+- **Local HEAD matches or is ahead of the remote**: proceed normally, no
+  need to mention this in the output.
+- **Local HEAD is behind the remote**: say so plainly and prominently in the
+  output (see "Output format"), stating how many commits behind. Ask the
+  person whether to proceed against the current (stale) checkout anyway, or
+  pull first and re-run — don't silently pick either. Auditing stale code
+  and reporting it as if it were current is a worse failure mode than
+  simply admitting the checkout is behind.
+- **No remote configured, not a git repo, or the fetch fails** (offline,
+  no network access, private remote unreachable from this environment):
+  say so and proceed against the local checkout as-is — this is the same
+  honest-disclosure-over-silent-assumption handling as any other signal in
+  step 2 that can't be checked.
+
+### 0.5. Check for a small-diff re-audit opportunity — and let the person decide, don't decide for them
+
+Skip this step entirely if step 0 found no history (`total_runs: 0`), if this
+project isn't a git repository, or if this run is already in dry-run mode.
+Otherwise (step 0.4 has already run by this point):
+
+1. From `list-results` (falling back to `list` if no execution results exist
+   yet), find the most recent record whose `scope` is `"full"` or absent
+   (legacy records with no `scope` field are full-scope by definition) **and**
+   that has a `git_commit` field. If none exists, skip this step — there's
+   nothing to diff against yet.
+2. Run `git diff --shortstat <that commit>..HEAD -- .` (and `git ls-files | wc
+   -l` for the project's total tracked file count) to measure how much has
+   actually changed since that commit.
+3. Only offer diff-mode when the change is **clearly small**: changed files
+   are both ≤15% of the project's total tracked files **and** ≤20 files in
+   absolute terms. If the diff is larger than that, don't ask — proceed
+   straight to step 1 as a full-scope run, the same as always. This
+   deliberately errs toward not bothering the person with a choice that isn't
+   a real cost/thoroughness tradeoff yet.
+4. If the diff qualifies, **ask the person directly** (via `AskUserQuestion`
+   if available, otherwise as a plain question in the response, and wait for
+   an answer before proceeding) rather than picking one silently. Show them
+   what they need to actually decide, not just "small or large":
+   - The base commit, its age, and the changed file/line count.
+   - Which domains currently have real accumulated debt (STALE/UNAUDITED/
+     PLANNED-ONLY per step 0's `report`) — a diff-only pass will **not**
+     touch those, so choosing it means that debt keeps aging. Say this
+     plainly; don't let the speed/cost upside hide this cost.
+   - The two options: **diff-only** (fast, cheap, scoped to what actually
+     changed) vs. **full** (re-examines everything, including domains with
+     existing debt).
+5. If they choose **diff-only**: this run's `scope` is `"diff"`. Scope step 2's
+   project inspection, step 3-4's domain scoring, and (in
+   `adaptive-audit-execute`) the actual Hunt passes to the changed files
+   themselves plus their direct blast radius (grep for what imports/calls
+   them elsewhere in the repo — don't re-read the whole project). Record
+   `diff_base_commit` (the commit diffed against) and `diff_files` (the
+   changed file list) in the `plan_record`, alongside `"scope": "diff"`.
+6. If they choose **full**, or this step was skipped or didn't qualify: this
+   run's `scope` is `"full"` (the default — always set it explicitly in the
+   `plan_record` even when nothing about this step applied, since
+   `adaptive-audit-execute`'s debt calculation needs every plan's scope to
+   read reliably, not just diff-scoped ones).
+
+Either way, record the current `git_commit` (`git rev-parse HEAD`, if this is
+a git repo) in the `plan_record` — this is what makes the *next* run's step
+0.5 possible. A project with no git history simply never qualifies for this
+step; that's a known, accepted limitation, not something to work around.
+
 ### 1. Interpret the request
 
 Note, without over-fitting to exact wording:
@@ -234,13 +326,23 @@ language; keep the JSON block's keys as-is):
 ````
 # Audit Plan
 (if step 1 found a dry-run/read-only constraint, say so in one line right here,
- before any other section: this run will not be recorded, and why)
+ before any other section: this run will not be recorded, and why. If step 0.4
+ found the local checkout behind its remote, say that here too, just as
+ prominently — how many commits behind, and whether the person chose to
+ proceed against the stale checkout or pull first and re-run)
 
 ## 過去の監査履歴
 (what step 0 found: total prior runs, and any domain with notable accumulated
  debt — high runs_since_last_deep, or repeatedly excluded. If total_runs is 0,
  say this is the first recorded run for this project. Reading history is safe
  in dry-run mode too — only step 7's write is skipped, not step 0's read.)
+
+## 差分監査の判断
+(only include this section when step 0.5 actually ran and found a qualifying
+ small diff: the base commit and how much changed, which domains have
+ existing debt a diff-only pass wouldn't touch, which option was chosen and
+ by whom (the person, via the question step 0.5 asked) — omit this section
+ entirely, don't just say "N/A", when step 0.5 didn't apply)
 
 ## リクエストの解釈
 (what was explicitly asked, what scope/depth was implied, what was left open)
@@ -273,6 +375,10 @@ language; keep the JSON block's keys as-is):
 {
   "schema_version": "1.0",
   "request": "<the original request, verbatim>",
+  "scope": "full | diff (see step 0.5 -- always set, default is \"full\")",
+  "git_commit": "<git rev-parse HEAD, if this is a git repo -- omit otherwise>",
+  "diff_base_commit": "<only when scope is \"diff\": the commit diffed against>",
+  "diff_files": ["<only when scope is \"diff\": the changed files>"],
   "domains": [
     {
       "domain_id": "<one id from references/audit-domains.md, e.g. \"security\">",

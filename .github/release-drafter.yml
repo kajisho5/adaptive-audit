@@ -1,0 +1,51 @@
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+# Only used to RESOLVE the next version number (release.yml runs this in
+# dry-run mode) -- the actual CHANGELOG.md/tag/GitHub Release are produced
+# by scripts/bump_version.py and release.yml itself, not by this action's
+# own release-drafting/body-template features. So only version-resolver
+# below actually matters; the rest of this file is unused by design but
+# kept minimal and valid rather than removed, in case that changes later.
+version-resolver:
+  major:
+    labels:
+      - 'major'
+  minor:
+    labels:
+      - 'minor'
+      - 'feature'
+  patch:
+    labels:
+      - 'fix'
+      - 'chore'
+  default: patch
+
+autolabeler:
+  - label: 'major'
+    title:
+      - '/\bbreaking\b/i'
+    body:
+      - '/BREAKING CHANGE/'
+  - label: 'feature'
+    branch:
+      - '/feature\/.+/'
+    title:
+      - '/\b(add|feat|feature)\b/i'
+  - label: 'fix'
+    branch:
+      - '/fix\/.+/'
+    title:
+      - '/\bfix(es|ed)?\b/i'
+  - label: 'chore'
+    branch:
+      - '/(chore|docs|test)\/.+/'
+    title:
+      - '/^(chore|docs|test)[:(]/i'
+    files:
+      - '*.md'
+      - 'evals/**'
+      - 'research/**'
+
+template: |
+  $CHANGES

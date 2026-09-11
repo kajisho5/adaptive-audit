@@ -785,3 +785,633 @@ shaped invariant extraction, and behavior at obs-studio-scale, remain
 untested). Reference file renamed from `EXPERIMENTAL-invariant-extraction.md`
 to `invariant-extraction.md` to match the status change; `README.md` updated
 to match.
+
+## Iteration 13 — invariant extraction, trial 3 (directed prompt closes the attention-bias gap)
+
+Direct follow-up to iteration 12's own limitation: a generic extraction prompt
+had missed a missing-idempotency bug despite reading the exact vulnerable
+code. Re-ran against the same project's `payment/` subsystem (no prior
+knowledge, as always), this time with the extraction prompt explicitly aimed
+at "duplicate input / state transition / derived-value consistency"
+invariants instead of a generic ask.
+
+**Result: this closed the gap.** The redirected prompt found the missing
+webhook-idempotency issue directly — the same mechanism/severity iteration
+11's `data-integrity` domain had independently confirmed, but this time
+*found* by the invariant pass itself, not merely convergent with something
+else. It also surfaced two genuinely new issues: LemonSqueezy's webhook
+stamps `datePaid` at processing time while Stripe/Polar derive it from the
+event's own timestamp (a real correctness inconsistency no prior pass on this
+project had caught), and a TOCTOU race in Stripe customer creation under
+concurrent checkout requests. Full write-up in
+`adaptive-audit-execute/references/invariant-extraction.md` ("Trial 3").
+
+**Conclusion drawn**: the attention bias iteration 12 surfaced is addressable
+by prompt design (running a differently-lensed extraction pass), not an
+inherent ceiling on the technique — but that in turn means invocation should
+run more than one lens (at minimum authorization/ownership, and
+duplicate-input/state-transition) rather than assume one generic pass covers
+everything, since trial 2 and trial 3's lenses surfaced materially different,
+non-overlapping findings from related code.
+
+## Iteration 14 — invariant extraction, trial 4 (first test at large-C-codebase scale)
+
+The other open gap from iteration 12: no data on how the technique behaves on
+a codebase large and unfamiliar enough that a single read-through can't cover
+it. Run against `obsproject/obs-studio`'s `plugins/obs-outputs/`
+(~20,571 lines of C) — the same real-world target as iteration 9's full
+7-domain audit — again with no knowledge of that audit's findings.
+
+Coverage was disclosed honestly rather than glossed over: only ~20% of the
+codebase was read closely, with entire subsystems (two codec-specific
+bitstream parsers, ~1,500 lines) never opened at all. Within that partial
+coverage: **the technique independently rediscovered iteration 9's two most
+severe confirmed findings** (third independent convergence trial, and the
+first on a large, unfamiliar, memory-unsafe C codebase rather than
+TypeScript/Python) — **and found two additional real, independently-Verified
+issues iteration 9's own `security` Hunt had not surfaced**, sitting in code
+a different domain (`architecture`) had read for an unrelated lens, or that
+no domain's Hunt had examined at all. In aggregate severity, both are at
+least comparable to, and one is more severe than, anything iteration 9 found
+in this subsystem.
+
+**Redacted for the same reason as iteration 9**: full technical detail is not
+published here. Both new findings are independently Verified and have been
+folded into the private disclosure draft prepared for OBS's official
+security contact, with the more severe one promoted to the top of that
+draft.
+
+**The self-honesty check produced a genuinely useful internal signal, not
+just a caveat**: the two invariants the extraction agent itself flagged as
+least concretely grounded (closer to generic hygiene phrased in
+codebase-specific language than tied to a verified repeated pattern) going
+into the checking pass turned out to be exactly the two that were violated
+worst. Weakly-grounded invariants correlating with where real gaps are is
+itself a signal worth designing around in future runs (e.g., treat
+low-grounding invariants as a prioritization cue for where to look hardest,
+not just a confidence caveat to report).
+
+**What this changes about the technique's standing**: this is the single
+most consequential result across all four trials to date — real,
+more-severe-than-previously-known findings in a widely-deployed real
+project, found specifically because the technique isn't scoped by domain the
+way Hunt is. A function one domain's Hunt read for one lens and another
+domain's Hunt never re-read for a different lens fell into exactly the gap
+between domain boundaries that a domain-agnostic invariant pass doesn't have.
+This does not mean the technique scales cleanly to large codebases — only
+~20% was covered — but it means even partial, time-boxed coverage at that
+scale still finds real, high-value things, which is the more defensible and
+more interesting claim. Full standing assessment, and the resulting
+invocation guidance (run multiple lenses; require honest coverage
+disclosure on large codebases), recorded in
+`adaptive-audit-execute/references/invariant-extraction.md`.
+
+## Iteration 15 — closing engineering gaps from a self-assessment, not a validation run
+
+Following an honest self-assessment of the project (weaknesses: audit cost,
+small real-world sample, invariant-extraction lens coverage, degraded
+same-session fallback quality, no automated regression protection, and the
+obs-studio safety-filter interruption), three of the six weaknesses were
+addressed directly; the other three (a diff/incremental audit mode, growing
+the real-world sample, and using a child session for genuine subagent
+isolation) were deliberately left as open design questions rather than
+implemented under a vague mandate — each is a real architectural change with
+its own cost/tradeoff that deserves its own decision, not something to slip
+in silently.
+
+**Automated regression tests for `receipts.py`** (`tests/test_receipts.py`,
+run via `.github/workflows/test.yml`): 15 tests covering both skill folders'
+copies of the script — fingerprinting, write/list roundtrip,
+`write-result`'s rejection of an unknown `plan_id`, `export-csv`/`report`
+consistency with `debt`, and, most importantly, two regression tests
+directly protecting the iteration-10 `depth_executed` fix: a result recorded
+with `depth_executed: "quick"` under a plan that specified `"deep"` must
+report `max_verified_depth_ever == "quick"`, while an old-style result with
+no `depth_executed` field at all must still fall back to the plan's depth.
+A `test_scripts_stay_identical` check also guards against the two skill
+folders' copies of `receipts.py` silently drifting apart, which nothing
+previously checked for. This is the one part of the project that's pure,
+deterministic logic rather than LLM output — CI can protect it the way it
+can't protect `SKILL.md` behavior itself, which still depends on hand-run
+evals.
+
+**Explicit recovery instruction for the safety-filter interruption**
+(`adaptive-audit-execute/SKILL.md`, security Verify section): iteration 9
+already fixed the *prevention* side (lead with static tracing, not a rebuilt
+harness) but had no instruction for what to do if a filter interruption
+happens anyway. Added: dispatch a fresh Verify subagent with the
+static-first instruction rather than resuming the interrupted approach,
+rather than leaving that recovery step to be improvised in the moment.
+
+**Multi-lens invariant-extraction guidance**: already addressed by trial 3's
+own conclusion and the "How to invoke it" section in
+`adaptive-audit-execute/references/invariant-extraction.md` (run more than
+one explicit lens, not one generic pass) — reviewed during this pass and
+confirmed no further change was needed here; this weakness was already
+closed by prior work, not newly fixed now.
+
+## Iteration 16 — diff-scoped re-audit (addressing the cost weakness directly)
+
+Direct follow-up to the cost weakness left open in iteration 15: the project
+always re-examines a whole project every run, even when almost nothing has
+changed since the last full audit. Added `adaptive-audit-plan` step 0.5: for
+a project with git history and a prior full-scope audit recorded, if the
+diff since that audit's commit is clearly small (≤15% of tracked files and
+≤20 files absolute), the plan step **asks the person to choose** between a
+cheap diff-only re-audit (scoped to the changed files and their direct blast
+radius) and a full re-audit — surfacing which domains currently carry real
+accumulated debt that a diff-only pass would leave untouched, rather than
+silently picking one or the other. This design (ask, don't decide, when the
+choice is real; show the debt cost of the cheap option) came directly out of
+a conversation about how to close this specific weakness, not from an
+eval run — worth naming as its origin.
+
+**Why a choice, not an automatic decision**: a diff-only pass isn't strictly
+better than a full one — it's cheaper but structurally blind to anything
+outside the diff, including whatever a domain's existing accumulated debt
+already represents. Automatically defaulting to diff-mode whenever it
+qualifies would quietly let real debt accumulate indefinitely on any project
+that only ever gets small incremental changes between audits. Automatically
+defaulting to full mode whenever a smaller option exists defeats the point
+of adding it. Neither default is honestly always right, so the plan asks
+instead of picking — the same principle as this project's existing
+dry-run/read-only handling (a real constraint the skill honors rather than
+silently overriding).
+
+**`receipts.py` changes, tested**: a `"diff"`-scoped plan's execution results
+must not count as verifying the whole domain the way a `"full"`-scoped
+result does — `_compute_debt` now reads `scope` from the *plan* a result
+executed (not the result itself, since execution can't widen or narrow what
+the plan already decided), and diff-scoped results are tracked separately as
+`diff_checks_since_last_full` rather than advancing `times_executed`/
+`max_verified_depth_ever`. `report`'s table gained a `DIFF SINCE FULL`
+column and `export-csv` a matching field. 4 new pytest tests cover: a
+diff-scoped result doesn't count as full verification; a full-scope result
+after one or more diff-scoped ones resets the counter and records real
+verification; both existing behaviors were exercised end-to-end via the
+actual CLI (subprocess calls), not just the internal `_compute_debt`
+function directly.
+
+**A real latent bug found and fixed while writing these tests, not before**:
+the first version of the reset test failed because `_load_all`'s sort falls
+back to glob (content-hash) order whenever two records tie on `created_at`,
+and `created_at` was only second-resolution — two results written by the
+same script invocation or a fast automated run can easily land in the same
+wall-clock second, at which point their relative order in every debt
+calculation becomes arbitrary rather than reflecting when they were actually
+written. This is not a new bug introduced by diff-scoping; it's a
+pre-existing property of the timestamp format that the new tests were simply
+the first to be sensitive enough to expose (nothing before this needed
+sub-second ordering to tell two records apart). Fixed by switching
+`created_at` to microsecond-precision ISO-8601 timestamps
+(`_now_iso()`); both `receipts.py` copies re-synced, all 19 tests (15 from
+iteration 15, 4 new) pass on both.
+
+**Not yet validated**: this has only been exercised through `receipts.py`'s
+own logic (verified deterministically) and the CLI directly — no real agent
+run has yet gone through `adaptive-audit-plan` step 0.5's own judgment (git
+diff sizing, presenting the choice via `AskUserQuestion`, correctly scoping
+a diff-mode Hunt to blast radius rather than the whole project). That's the
+next real-world validation gap for this feature, the same way staged
+depth-escalation (iteration 10) wasn't validated on a real project until
+iteration 11.
+
+## Addendum to iteration 16 — freshness check (step 0.4), same conversation
+
+A follow-up question in the same conversation surfaced a real gap the diff
+feature had introduced without addressing it: step 0.5's diff sizing (and
+every other step's project inspection) silently assumes the local checkout
+is current. A local clone behind its remote breaks that assumption
+invisibly — the plan would be built against stale code, and step 0.5's diff
+size could be measured against the wrong commit entirely.
+
+Added `adaptive-audit-plan` step 0.4, ahead of step 0.5: `git fetch` (never
+`git pull` — this skill's read-only guarantee is about the target project's
+own files, and `git pull` would touch the working tree) to update
+remote-tracking refs, then compare local `HEAD` against them. If local HEAD
+is behind, say so prominently in the output and ask the person whether to
+proceed against the stale checkout or pull first and re-run, rather than
+silently doing either. In dry-run mode, even `git fetch` is skipped (it
+writes inside the target repo's own `.git/` directory — remote-tracking
+refs, `FETCH_HEAD` — which is a real side effect even though it never
+touches a tracked file), falling back to whatever remote-tracking state
+already exists locally and disclosing that freshness couldn't be actively
+verified this run.
+
+Documentation-only change (no `receipts.py` logic involved) — not yet
+validated against a real project either, same open gap as the rest of
+iteration 16.
+
+## Iteration 17 — explicit opt-in to save the findings report into the project
+
+Another follow-up in the same conversation: for the person's own project (as
+opposed to the third-party targets this project's own validation history is
+built on), it's reasonable to want the findings report kept with the project
+rather than only surfaced in chat. Added to `adaptive-audit-execute` only
+(not `adaptive-audit-plan` — a plan-only run's output is less clearly worth
+persisting the same way a findings report is, so this stayed scoped to where
+the actual use case is): step 0 now also detects an explicit request to save
+the report into the project, and step 4.5 (new) writes it to
+`docs/audit-reports/<date>-<slug>.md` when that request was present.
+
+**Deliberately not auto-detected from repo ownership.** Checking whether a
+target repo is "the person's own" (matching a git remote's owner against
+some notion of the current user) was considered and rejected: this skill's
+"never writes to the audited project" guarantee is part of what its own
+real-world validation runs against third-party projects (obs-studio,
+open-saas, yamaha-rcp-osc-bridge) rely on for trust, and a misclassification
+here — writing into a repo that isn't actually the requester's to write
+into — would be a real, hard-to-undo mistake with no clean recovery. An
+explicit per-request signal (the same pattern already used for dry-run mode
+and the freshness check) has no such failure mode: worst case, the option
+just doesn't trigger when it could have.
+
+**Committing is explicitly left to the person, never done by the skill.**
+Writing the file is what was asked for; `git add`/`git commit` is a separate,
+visible action affecting the project's own history, which this project's
+broader operating conventions already treat as something requiring a human
+decision, not something a skill should do on someone's behalf just because
+adjacent behavior was authorized.
+
+**Security-content permanence is called out explicitly, not left implicit.**
+A report containing a real, currently-unpatched vulnerability description
+becomes part of git's permanent history the moment it's committed —
+recoverable forever unless history itself is rewritten, even after the
+underlying code is fixed. Step 4.5 requires surfacing this in the chat
+response itself (not just as a line inside the written file, which is easy
+to miss) whenever the report being saved contains a CONFIRMED/PLAUSIBLE
+security finding or another medium/high-severity unpatched issue, so the
+person has that information before deciding whether to commit, not after.
+
+`receipts.py`'s own records (plan receipts, execution results) are
+unaffected and stay external regardless of this setting — they're
+operational debt-tracking data, not the human-readable deliverable this
+feature is about, and mixing the two was rejected on that basis alone.
+
+Documentation-only change — not yet validated against a real project.
+
+## Iteration 20 — opt-in Remediate step (`adaptive-audit-execute` step 6), validated with a real trial
+
+Added a new opt-in step 6 ("Remediate") triggered only by a separate,
+explicit follow-up request after an audit ("直して", "直してPRにして") —
+never inferred from a finding's severity or the audit's own
+`overall_status`. Unlike iteration 17's step 4.5, this one writes to the
+target project's actual code, not just a report file, so it went through
+a real trial rather than shipping as a documentation-only change.
+
+**Method.** A fresh, isolated subagent was given: the exact SKILL.md step 6
+text, one synthetic CONFIRMED finding (the real O(n·m) full-table-rescan
+pattern in `evals/fixtures/cli-data-processor/process.py`, already used by
+eval-1 in `evals.json`), and the simulated follow-up "直して" with nothing
+else asked. It ran against a disposable git-tracked copy of the fixture
+(never the fixture itself — `evals/fixtures/**` stays frozen per
+`CONTRIBUTING.md`), instructed to follow step 6 literally and report in
+full detail, including friction points, not just a success summary.
+
+**Result: the fix itself was solid.** The subagent replaced the per-row
+`enrich_row` loop in `main()` with a single vectorized `pd.merge` (O(n+m)
+instead of O(n·m)), correctly preserved `enrich_row`'s original "first
+match wins" behavior for duplicate lookup ids via `drop_duplicates`, left
+`enrich_row` itself untouched (still exercised by the pre-existing test, and
+removing it would have been a drive-by change beyond what the finding
+described), added a real regression test (a call-counting spy on
+`enrich_row` asserting zero calls from `main()`, not a flaky timing
+assertion), and ran the full suite (3 tests, including the untouched
+original) — all passing. Benchmarked directly: 1.695s → 0.003s at n=m=4000
+rows, ~500x, confirming the fix actually addresses the finding's
+`failure_scenario` rather than just plausibly sounding like it does.
+`git status` after the run confirmed nothing was staged or committed, as
+step 6.4 requires for a plain "直して" with no further request.
+
+**Two real gaps this trial found in step 6's own wording, both fixed
+directly in `SKILL.md` from this trial's evidence, not speculatively:**
+
+1. **Step 6.2's "state this plainly, up front" was satisfiable by writing
+   it into the final report instead of sending it before starting work** —
+   the subagent did state the write/push-access check, but only as part of
+   its end-of-task narrative, defeating the actual purpose (letting the
+   person redirect before time is spent). Fixed: 6.2 now says explicitly
+   that this must be its own message sent *before any file is touched*,
+   not folded into the completion report.
+2. **"Add a test that would have caught this bug" (6.3) doesn't obviously
+   apply to a performance/complexity finding** — there's no single
+   assertion that "catches" O(n·m) growth the way there is for a
+   correctness bug, and a timing-based test is flaky. The subagent resolved
+   this on its own judgment (a structural regression test instead of a
+   timing one) and flagged that SKILL.md didn't actually say to do this.
+   Fixed: 6.3 now states the preference explicitly (structural regression
+   test over a timing assertion for performance/complexity findings)
+   instead of leaving it to be independently rediscovered on every run.
+
+**Not yet validated**: a trial fixing more than one finding at once. The
+other two gaps noted above — push/PR requested-but-absent, and a
+non-Python target — were closed by iteration 21, immediately below.
+
+## Iteration 21 — two more Remediate trials: PR requested but impossible, and a non-Python (Go) target
+
+Two more isolated trials, closing two of the three gaps iteration 20 left
+open.
+
+### Trial A — "直してPRにして" against a repo with no remote at all
+
+Same `cli-data-processor` O(n·m) finding as iteration 20, fresh disposable
+copy, but this time the simulated follow-up was "直してPRにして" (fix it
+*and* turn it into a PR) against a git repo deliberately left with no
+remote configured — simulating a session with local write access but no
+push destination whatsoever (not a missing credential; no destination to
+push to at all).
+
+The subagent correctly produced 6.2's upfront disclosure as its own message
+before touching any file, confirmed via `git remote -v` first: local write
+access yes, push/PR no, and why (no remote configured, not an auth
+problem). It then fixed the finding properly — this time via a
+precomputed `id -> label` dict (`O(m)` build + `O(1)` lookups, `O(n+m)`
+total) rather than iteration 20's `pd.merge`, a different but equally valid
+way to resolve the same finding — added a structural regression test
+(monkeypatching `pandas.Series.__eq__` to assert zero table-scan
+comparisons across 200 calls, catching a revert the same way iteration 20's
+call-counting spy did), and ran the full suite (3/3 passing).
+
+**The real gap found**: nothing left uncommitted was staged, but the
+subagent had to *improvise* whether "PRにして" implies permission to at
+least `git commit` locally once the PR itself was already known to be
+impossible — SKILL.md's step 6.4 says committing is a separate escalation
+from a plain fix, but didn't address whether that still holds when the
+person's actual request named a goal beyond commit that turned out to be
+unreachable. The subagent judged, reasonably, that a request for PR is not
+the same as a request for "commit as far as you can" and left the fix
+uncommitted — but flagged this as a judgment call the text doesn't make
+for them. Fixed directly in step 6.4: an unreachable requested end-state
+does not retroactively authorize a lesser action (like committing) that
+was never itself requested.
+
+### Trial B — a Go/concurrency finding (first non-Python target)
+
+A synthetic but realistic finding against `evals/fixtures/go-queue-worker`
+(reused from `evals.json` eval-2): an unsynchronized package-level
+`map[string]string` (`internal/cache/cache.go`) written from multiple
+worker goroutines with no mutex, on a disposable git-tracked copy. Follow-up:
+plain "直して".
+
+The subagent chose `sync.RWMutex` over `sync.Map` (better fit for a
+`map[string]string` with an existing typed API to preserve) or a
+channel-owned goroutine (a bigger structural change than the finding
+called for), left `internal/worker/worker.go`'s separate, unflagged
+"no timeout on downstream calls" comment untouched per 6.3's
+scope discipline, and — since the project had zero existing tests — wrote
+a new `cache_test.go` with 50 goroutines × 100 ops.
+
+**What this trial actually validated, and why it matters**: the subagent
+ran its new test with `go test -race` against the *original, unfixed* code
+first — confirming the race detector actually caught the real hazard
+(`WARNING: DATA RACE` at the exact flagged line, 5/5 runs) — before running
+it again against the fix (clean, 5/5 runs). This before/after A-B
+verification is exactly what iteration 20's structural-test principle
+("a test claiming to catch a bug must be shown to actually have the power
+to catch it") requires, but SKILL.md's step 6.3 had only ever stated that
+principle for the performance case, not generalized it. A race is
+non-deterministic — a bare pass/fail run proves nothing, since it can pass
+against genuinely buggy code by chance. Fixed directly in step 6.3: added
+explicit guidance for concurrency findings to use the ecosystem's race
+detector and verify the new test fails on the unfixed code before trusting
+it against the fix, framed as the same underlying principle as the
+performance case applied to a different failure mode, with an explicit
+instruction to apply that same principle by judgment for any bug class
+this doesn't name outright.
+
+**Conclusion (iteration 21)**: both trials' fixes were independently
+verified correct (A: complexity provably reduced via a structural
+assertion; B: race provably eliminated via a before/after `-race` A-B
+check) and both left the working tree in the exact state 6.4 requires
+(nothing staged, nothing committed, nothing pushed). Both trials found a
+real SKILL.md wording gap under load-bearing conditions the previous
+trial hadn't exercised, and both were fixed directly from that evidence
+rather than spawning a hypothetical future TODO — consistent with this
+project's standard that a step counts as validated only once a real trial
+exists for the case in question, not merely once its documentation reads
+plausibly.
+
+## Iteration 22 — multiple findings in one turn (the last of the three originally-flagged gaps)
+
+Closes iteration 21's remaining open item. Two separate CONFIRMED
+`security` findings against a fresh disposable copy of
+`evals/fixtures/webapp-auth-payment` (`npm install`'d for real — express,
+jsonwebtoken, pg, stripe): a SQL-injection-via-string-built-query in
+`routes/auth.js`'s `login()`, and two more in `routes/payments.js`'s
+`handleWebhook()`. A third real issue in the same fixture (missing Stripe
+webhook signature verification) was deliberately left **not** CONFIRMED in
+the scenario, to check scope discipline held under a multi-finding load
+too. Follow-up: plain "直して", naming no finding numbers.
+
+**Result: both findings fixed, not just the first**, confirming step 6.1's
+"default to every CONFIRMED finding when none are named" actually holds
+under real multi-finding load rather than an agent tending to stop after
+the first one. Both fixes correctly used `pg`'s `$1`/`$2` parameter
+placeholders instead of further string-building. The untouched third issue
+was verified byte-for-byte unchanged (`require('stripe')(...)` and both of
+its explanatory comments identical to the original) — scope discipline
+held with two findings in play, not just one.
+
+**Verification, with no live Postgres available**: the fixture has no test
+framework at all (`package.json` has no `devDependencies`, no test
+script). Rather than skip verification (which 6.3 already forbids), the
+subagent stubbed the actual boundary — monkey-patching the shared
+`lib/db.js` `query` function via Node's module cache — and ran real
+injection payloads (`' OR '1'='1'`; stacked `; DROP TABLE ...` statements)
+through both fixed routes, capturing the literal SQL text and params sent
+to the stub. It then did the same A/B check iteration 21 established for
+concurrency findings, generalized here to SQL injection on its own
+initiative: `git stash`'d the two fixes back to the
+original vulnerable code and re-ran the identical script, which genuinely
+reproduced the injection (the attacker string spliced directly into the
+captured SQL text) before `git stash pop` restored the fix and confirmed
+it clean again. This is exactly the "a test claiming to catch a bug must
+be shown to have the power to catch it" principle from iteration 20/21,
+now demonstrated to generalize on an agent's own judgment to a third bug
+class (injection) that step 6.3 doesn't name specifically — the general
+principle sentence added in iteration 21 (apply this by judgment for any
+bug class the list doesn't cover) did its job.
+
+**One execution inconsistency, not a new SKILL.md gap**: this trial's
+report folded 6.2's write/push-access disclosure into the single final
+report rather than emitting it as a genuinely separate message before any
+file was touched, unlike iterations 20-21's trials. Since those prior
+trials — run in the identical single-subagent-turn harness as this one —
+*did* successfully emit that disclosure as a distinct piece of output
+before their first edit, this looks like inconsistent execution on this
+particular run rather than a structural limitation the SKILL.md wording
+needs to account for. Noted here rather than silently smoothed over, but
+not treated as grounds for another SKILL.md edit — a single trial
+deviating once, when two prior trials in the same shape did it correctly,
+isn't yet evidence of a wording problem.
+
+**Conclusion (iteration 22)**: this closes all three gaps iteration 20's
+initial trial left open (push/PR-impossible handling, a non-Python target,
+multiple findings in one turn). Step 6 has now been exercised across
+Python/pandas, Go/goroutines, and Node/SQL, across performance,
+concurrency, and injection bug classes, across single- and multi-finding
+requests, and across push-possible and push-impossible destinations — five
+real trials total (iterations 20-22), each independently verified rather
+than asserted, with every SKILL.md wording gap they found fixed directly
+from that evidence. Not a claim that step 6 is now exhaustively validated
+— eval coverage is not the same as formal verification, and this project
+draws that distinction elsewhere too (see the "Not yet validated" lines
+throughout this file) — but it is no longer the documentation-only,
+zero-trial state it shipped in.
+
+## Iteration 18 — self-hosted plugin marketplace, closing the actual gap the version-bookkeeping addition (iteration 16-17-adjacent) didn't
+
+Iteration 17's `VERSION`/`CHANGELOG.md`/`release.yml` addition was explicit
+that it gave this project's own history a stable marker, nothing more — it
+did not, and could not, make an installed copy of these skills actually
+update. A follow-up question in the same conversation surfaced that this
+wasn't what was actually wanted: the person wanted their own installed
+copy to pick up new versions without a manual re-copy.
+
+Before implementing, three separate facts were verified against official
+Claude Code documentation (not assumed) via the `claude-code-guide` agent,
+since getting any of them wrong would have meant recommending a change
+that silently doesn't do what it claims to:
+
+1. Whether a plugin-sourced skill still gets automatically model-invoked
+   by its `description` field the same way a plain `.claude/skills/` one
+   does, or whether plugin packaging forces explicit `/plugin-name:skill`
+   invocation only. **Confirmed**: automatic invocation is preserved;
+   namespacing only affects the manual slash-command alias. This was the
+   one fact that mattered most — this project's founding premise is that a
+   bare "バグチェックして" triggers the skill with no explicit command, and
+   a change that silently broke that would have been a real regression.
+2. Whether a single repo can self-host both a marketplace and the one
+   plugin it lists (rather than needing a separate marketplace repo), and
+   whether the existing top-level `adaptive-audit-plan/`/
+   `adaptive-audit-execute/` folders could stay exactly where they are.
+   **Confirmed**: yes to both — a `skills` array field in the marketplace
+   entry can point at arbitrary paths relative to the plugin root, so no
+   file moves were needed.
+3. Whether adding `.claude-plugin/` breaks or coexists with the existing
+   plain-copy `.claude/skills/` install method documented in the README.
+   **Confirmed**: they coexist untouched (different namespaces).
+
+Added `.claude-plugin/marketplace.json` (one file, no restructuring):
+declares one plugin (`adaptive-audit`) whose `skills` field points at both
+existing folders. README's "Usage" section now documents both install
+paths side by side (plain copy: no update mechanism, vs. plugin: `/plugin
+marketplace add` + `/plugin install`, later `/plugin marketplace update` to
+pull the latest, with the honest caveat that auto-update itself is off by
+default for a third-party/personal marketplace like this one and has to be
+enabled per-marketplace if a fully hands-off flow is wanted).
+
+**Guardrail added, not just a feature**: `marketplace.json`'s plugin
+`version` field and the root `VERSION` file are two files a human now has
+to remember to bump together, with nothing enforcing that at write time —
+exactly the kind of drift `test_scripts_stay_identical` already guards
+against for the two `receipts.py` copies. Added
+`tests/test_versioning.py` (2 new tests: version fields match; the
+`skills` paths in `marketplace.json` actually exist and match the expected
+set) — 21 tests total now, up from 19.
+
+CHANGELOG.md's own header, which iteration 17 had written to say
+marketplace distribution "was deliberately not pursued," was corrected in
+the same change — it's no longer accurate as a blanket statement now that
+a personal/third-party marketplace exists; only *public* marketplace
+listing (npm/PyPI-style broad distribution) remains the thing that wasn't
+pursued, and the header now says so precisely instead of overclaiming in
+either direction.
+
+Not yet validated end-to-end against a real Claude Code session (adding
+the marketplace, installing from it, confirming auto-invocation actually
+fires post-install, running `/plugin marketplace update` after a new
+commit) — the facts above are verified against documentation, not by
+actually exercising the install flow in this project's own validation
+history yet.
+
+## Iteration 19 — full repo automation: release pipeline, autolabel, Dependabot, CodeQL, PR template, SECURITY.md
+
+Requested as a complete package: a comprehensive, explicitly-specified set
+of GitHub repo automation, added only where a prior investigation confirmed
+it didn't already exist. Investigation first: no `package.json`/
+`pyproject.toml`/`requirements.txt` at the repo root (only inside
+`evals/fixtures/*/`, which are frozen synthetic test corpora, not this
+repo's own dependencies); real source is Python only
+(`scripts/bump_version.py`, both `receipts.py` copies, `tests/*.py`); prior
+`.github/` contents were exactly `workflows/test.yml` and the
+simpler VERSION-push-triggered `workflows/release.yml` from iteration
+17 — no Dependabot, no PR template, no CODEOWNERS, no SECURITY.md, no
+CodeQL, no labels ever used on either of the repo's 2 PRs to date.
+
+**Verified before implementing, not assumed**, since a wrong config key
+silently no-ops rather than erroring: `release-drafter`'s action inputs/
+outputs (fetched `action.yml` directly — confirmed `dry-run`, `resolved_version`
+et al.), its `version-resolver`/`categories`/`autolabeler` config schema
+(fetched `schema.json` and the README's autolabeler section directly,
+since an initial broad README fetch's summary had missed the
+`version-resolver` schema entirely — re-fetched narrowly and found it),
+and the exact autolabeler sub-action reference (`release-drafter/
+release-drafter/autolabeler@v7`, from a verified README example, not
+guessed from the main action's own tag). Confirmed the docs are silent on
+whether the autolabeler auto-creates missing GitHub labels — rather than
+gamble on undocumented behavior, `autolabel.yml` creates the 5 needed
+labels itself (idempotently, via `actions/github-script`, tolerating a 422
+"already exists") before the autolabeler step runs. Also verified
+`github/codeql-action/init`'s `config` input (inline YAML, same shape as
+`config-file`) directly from its `action.yml`, used to exclude
+`evals/fixtures/**` from CodeQL analysis.
+
+**Single-job release design, per the explicit anti-recursion requirement**:
+`release.yml` runs entirely in one job on push to `main` — resolve version
+(release-drafter dry-run, skipped if `VERSION` is already ahead of the
+latest tag) → decide → bump `VERSION`/`CHANGELOG.md`/`marketplace.json`
+(`scripts/bump_version.py`) → commit → tag → GitHub Release → publish
+(no-op here, no package registry applies to this repo, but wired to skip
+cleanly rather than omitted). Never split across a push-triggered and a
+tag-triggered workflow: a push made with the default `GITHUB_TOKEN` (this
+job's own commit/tag push) never triggers another workflow run, so a
+second, tag-triggered workflow would simply never fire — exactly the
+pitfall specified up front, and the reason this replaced iteration 17's
+simpler two-piece-ready design with one consolidated job instead.
+
+**Script-injection avoidance, and a concrete test for it**:
+`scripts/bump_version.py` builds the changelog section from `git log`
+output captured via `subprocess` with an explicit argv list — never by
+interpolating a PR title, commit message, or other untrusted string
+directly into a `${{ }}`-templated shell command, the documented GitHub
+Actions script-injection pattern. `tests/test_bump_version.py`'s
+`test_commit_subjects_are_not_shell_evaluated` makes this concrete: a
+commit subject containing `` $(touch pwned) ``, backticks, and quotes ends
+up as literal, unexecuted text in `CHANGELOG.md` — confirmed by asserting
+the file `pwned` was never created.
+
+**Isolated-fixture testing, exactly as specified**: `scripts/bump_version.py`
+was manually exercised against a throwaway git repo under `/tmp`
+(`pwd` checked before and after every step) covering the normal case
+(prior tag exists, commits since it become the new section), the
+first-ever-release case (no prior tag), the no-`[Unreleased]`-marker
+fallback path, and the shell-metacharacter commit subject — catching and
+fixing a real formatting bug in the same pass (the newly-inserted section
+ran directly into the next `## [` heading with no blank line, from an
+`.lstrip("\n")` that stripped one newline too many). The throwaway fixture
+was deleted afterward and the real repo's own `VERSION`/`CHANGELOG.md`
+confirmed untouched by any of this. `tests/test_bump_version.py` (5 tests)
+now covers the same ground permanently, for a total of 26 tests (up from
+21).
+
+**Judgment calls made and disclosed, not left implicit**: `evals/fixtures/**`
+excluded from both Dependabot and CodeQL (deliberately-vulnerable/stale
+test corpora, not live dependencies or real findings about this repo);
+`autolabeler` patterns are keyword-based (`\bfix\b`, `\badd|feat|feature\b`,
+etc.) rather than assuming Conventional-Commits-style title prefixes
+(`feat:`, `fix:`), since neither of this repo's two real PR titles to date
+used that convention; `release-drafter.yml`'s changelog/body templates are
+present but functionally unused, since `bump_version.py` and `release.yml`
+own actual changelog/release generation directly — only its
+`version-resolver` config is load-bearing.
+
+**Not yet validated**: this entire pipeline still needs a real merge to
+`main` with a labeled PR to confirm end-to-end (autolabel actually firing
+on a real PR, the version resolving correctly from that label, the commit/
+tag/release sequence actually succeeding against the real repo's branch
+protection settings, if any — direct-push-back-to-main from a workflow can
+be blocked by branch protection depending on how it's configured, which
+this iteration could not check from inside a session with git access but
+not the repo's branch-protection settings). Documented as a known
+follow-up, not silently assumed to work.

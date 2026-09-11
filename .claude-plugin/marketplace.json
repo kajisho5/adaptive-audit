@@ -1,0 +1,18 @@
+{
+  "name": "adaptive-audit",
+  "owner": {
+    "name": "kajisho5"
+  },
+  "plugins": [
+    {
+      "name": "adaptive-audit",
+      "source": "./",
+      "description": "Domain-agnostic adaptive code audit: plan generation (adaptive-audit-plan) plus Hunt -> Verify execution with cross-run audit-debt tracking (adaptive-audit-execute).",
+      "version": "0.1.0",
+      "skills": [
+        "./adaptive-audit-plan",
+        "./adaptive-audit-execute"
+      ]
+    }
+  ]
+}

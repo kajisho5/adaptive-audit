@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # The only real, live dependency surface in this repo: the third-party
+  # GitHub Actions pinned in .github/workflows/*.yml (actions/checkout,
+  # release-drafter, actions/github-script, etc.).
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+
+# Deliberately no npm/pip/etc entries. The package.json and requirements.txt
+# files that exist under evals/fixtures/*/ (webapp-auth-payment, task-api,
+# internal-tool-hidden-secret, cli-data-processor) are frozen synthetic test
+# corpora for adaptive-audit-execute/-plan's own evals -- some of them are
+# deliberately vulnerable or deliberately stale on purpose, to give the
+# audit skills something real to find. Dependabot "fixing" them would
+# corrupt the fixtures the evals depend on, not help this repo's own
+# dependency health (which has none -- this repo itself has no
+# package.json/pyproject.toml/requirements.txt at its root).

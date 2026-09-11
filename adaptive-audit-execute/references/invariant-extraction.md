@@ -124,39 +124,139 @@ around (e.g., explicitly prompting for invariants about *effects of
 repeated/duplicate input*, not just *authorization/ownership*), not just
 disclosing.
 
+## Trial 3 (same project, directed at duplicate-input/state-transition invariants)
+
+Trial 2's attention-bias limitation — missing an idempotency invariant despite
+reading the exact vulnerable webhook code — raised an obvious question: was
+that a limitation of the technique itself, or just of an extraction prompt
+aimed at authorization/ownership invariants specifically? Re-ran against the
+same project's `payment/` subsystem, same no-prior-knowledge condition, but
+this time the extraction prompt explicitly asked for invariants about
+*effects of repeated/duplicate input, state transitions, and derived-value
+consistency* rather than a generic prompt.
+
+Result: **the redirected prompt found the missing-idempotency bug directly.**
+Two of ten extracted invariants ("applying the same external event twice must
+not double-apply its effect," "a derived incrementing value needs a mechanism
+tying each increment to a unique source-event id") were checked as VIOLATED
+with the exact same mechanism and severity the domain-based `data-integrity`
+Hunt had independently confirmed — this time *found* by invariant extraction,
+not just capable of converging with something else's finding. It also
+surfaced two invariants genuinely new relative to every prior pass on this
+project: LemonSqueezy's webhook stamps `datePaid` at processing time while
+Stripe/Polar derive it from the event's own timestamp (a real correctness
+inconsistency), and a TOCTOU race in Stripe customer creation under
+concurrent checkout requests.
+
+The run's own self-honesty check made the mechanism explicit: the missing
+idempotency ledger is an *absence* (something not in the schema), not a
+locally-visible defect in the code you're reading — noticing it requires
+deliberately asking "what happens if this exact event arrives twice" rather
+than reviewing each file for what it does wrong in isolation. **This
+confirms the attention bias is addressable by prompt design, not an
+inherent ceiling on the technique** — but it also means a single generic
+extraction pass cannot be assumed to cover every invariant class; different
+lenses (authorization, duplicate-input/state-transition, and likely others
+still untried) need to be run as distinct passes, not folded into one
+generic ask.
+
+## Trial 4 (obs-studio, ~20,571-line C codebase — first test at this scale/language)
+
+The other open gap from trial 2 was untested behavior at large, unfamiliar,
+memory-unsafe-language scale. Run against `obsproject/obs-studio`'s
+`plugins/obs-outputs/` — the same real-world target as a full prior
+domain-based 7-domain audit (see `evals/validation-notes.md` iteration 9) —
+again with no knowledge of that prior audit's findings.
+
+Coverage was real and disclosed honestly, not glossed over: only ~20% of the
+20,571 lines were read closely (the extraction agent named which files it
+prioritized and which ~25% of the codebase, mostly two codec-specific
+bitstream parsers, it never opened at all). Within that partial coverage:
+
+- **It independently rediscovered the prior audit's two most severe
+  confirmed AMF-decoder findings**, via the same buffer/length-invariant
+  lens rather than domain-based Hunt's framing — the third independent trial
+  now showing this convergence property, and the first on a large,
+  unfamiliar, memory-unsafe C codebase rather than TypeScript/Python.
+- **It found two additional real, independently-Verified issues the
+  domain-based audit's own `security` Hunt had not surfaced**, in code paths
+  a different domain (`architecture`) or no domain at all had touched.
+  Technical detail is intentionally not published here — the same
+  redaction discipline applies as to every other real vulnerability finding
+  in this project's validation record (see iteration 9's own redaction
+  note) — but in aggregate severity, both are at least comparable to, and
+  one is more severe than, anything the original 7-domain audit found in
+  this subsystem. Both went through the same independent adversarial-Verify
+  process as every other finding in this project before being counted.
+- **Self-honesty check confirmed a real, specific coverage cost**: the two
+  invariants the extraction agent itself flagged as least concretely
+  grounded ("generic hygiene phrased in codebase-specific language" rather
+  than tied to a repeated, verified pattern) going into the checking pass
+  were exactly the two that turned out to be violated worst — a genuinely
+  useful internal signal (weakly-grounded invariants correlate with where
+  gaps actually are), not just a confidence caveat. The agent was also
+  explicit that entire subsystems (two codec bitstream parsers, ~1,500
+  lines) are not represented in the invariant list at all, simply because
+  they fell outside what a single pass had time to reach.
+
+This is the single most consequential result across all four trials: the
+technique found real, more-severe-than-previously-known issues in a
+widely-deployed real project specifically *because* it isn't scoped by
+domain the way Hunt is — a function one domain's Hunt read for one lens
+(structure) and another domain's Hunt never re-read for a different lens
+(memory safety) fell into exactly the gap between domain boundaries that an
+invariant-based pass, run without those boundaries, doesn't have.
+
 ## Current standing
 
-What trial 2 adds beyond trial 1: real-project scale (not just a small
-fixture), real cost data, a tested false-positive-check methodology (even if
-the sample is still small), and — most importantly — the first concrete case
-of the technique finding something a full domain-based audit missed, at
-comparable cost to that domain's own process. That's enough to move this from
-"purely speculative, don't use it" to **a validated opt-in enhancement worth
-reaching for on the `security` domain specifically at Standard/Deep depth**,
-not enough to promote it into `SKILL.md` step 1 as a default step for every
-run or every domain:
+Four trials now, not two, closing both gaps identified after trial 2:
 
-- Only 2 trials total, both scoped to auth/access-control-shaped invariants —
-  never yet tried with an extraction prompt aimed at correctness, reliability,
-  or data-integrity-shaped invariants (e.g. "what must be true about how this
-  system handles a duplicate/retried input" — exactly the class this trial's
-  own attention-bias finding shows it currently under-produces).
-- Still no data on how the technique degrades on a codebase large enough that
-  "what does this pattern imply" stops being answerable from a single
-  focused read-through (obs-studio-scale, ~20K+ lines, hasn't been tried).
-- `n=2` false-positive-rate data point is a real signal, not a rate.
+- **Attention bias is addressable by prompt design** (trial 3) — but this
+  means invocation should explicitly run more than one extraction lens
+  (authorization/ownership; duplicate-input/state-transition; likely others
+  not yet tried) rather than one generic pass and assuming full coverage.
+- **The technique holds up, partially, at large C-codebase scale** (trial 4)
+  — convergence with known findings replicated a third time, and it found
+  real issues a domain-based audit's own scoping had missed, but only
+  covering ~20% of the codebase in the time available. This is not evidence
+  it scales *cleanly* to large codebases — it's evidence that even partial,
+  time-boxed coverage at that scale still finds real things, which is a
+  different and more modest claim.
+- False-positive data across all four trials: every VIOLATED/CONDITIONAL
+  classification that has been independently adversarially re-verified so
+  far has held up (trial 1's fixture-based honesty check aside, which wasn't
+  independently re-verified the same way). Still a small, non-random sample
+  — every claim verified so far came from a trial run by this same project,
+  using this same verification methodology — not grounds for a general
+  false-positive-rate claim.
+
+This is now well past "purely speculative" — it has independently found real,
+previously-unknown, more-than-domain-based-hunting issues in a real,
+widely-deployed piece of software. It remains an **opt-in enhancement**, not
+promoted to `SKILL.md` step 1 as a mandatory default: partial coverage at
+scale and a still-small, single-project-sourced verification sample are real,
+disclosed limits, not resolved ones.
 
 ## How to invoke it, now that there's a validated procedure
 
-1. Run the extract-then-check two-pass technique described above (still: no
-   knowledge of any other domain's findings, extraction pass fully before the
-   checking pass) as an additional Hunt-shaped pass alongside — not instead of
-   — the `security` domain's normal Hunt.
-2. Feed every VIOLATED and CONDITIONAL classification into the normal Verify
+1. Run the extract-then-check two-pass technique as an additional
+   Hunt-shaped pass alongside — not instead of — the relevant domain's
+   normal Hunt. Run it as **more than one pass with different explicit
+   lenses** when time/cost allows (at minimum: authorization/ownership, and
+   duplicate-input/state-transition) rather than one generic extraction
+   prompt — trial 3 showed these surface materially different findings from
+   the same code. Still: no knowledge of any other domain's findings, and
+   the extraction pass fully complete before the checking pass begins.
+2. On a large or unfamiliar codebase, have the extraction agent explicitly
+   report which files/fraction of the codebase it actually covered — trial
+   4's honest coverage disclosure is what made its result trustworthy rather
+   than a false "we checked everything" claim, and that reporting should be
+   a required part of the output, not an optional nicety.
+3. Feed every VIOLATED and CONDITIONAL classification into the normal Verify
    step (`SKILL.md` step 2) exactly like an ordinary Hunt candidate — isolated,
    no visibility into the extraction agent's own confidence or reasoning.
    HELD invariants are not findings and don't need Verify.
-3. Report the invariant-derived findings alongside the domain-based ones in
+4. Report the invariant-derived findings alongside the domain-based ones in
    the same output, tagged as such (e.g. `"source": "invariant-extraction"` on
-   the candidate) so a reader can see which detection path produced which
-   finding — that distinction is itself useful signal, not overhead to hide.
+   the candidate, plus which lens produced it) so a reader can see which
+   detection path — and which lens — produced which finding.

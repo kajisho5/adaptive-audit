@@ -41,7 +41,7 @@ import hashlib
 import json
 import os
 import sys
-import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 STORE_ROOT = Path(os.environ.get("ADAPTIVE_AUDIT_HOME", str(Path.home() / ".adaptive-audit")))
@@ -85,6 +85,16 @@ def load_results(project_root: str):
     return _load_all(results_dir(project_root))
 
 
+def _now_iso() -> str:
+    # Microsecond precision, not just seconds: _load_all's sort falls back to
+    # glob order (content-hash order, effectively arbitrary) whenever two
+    # records tie on created_at, which whole-second resolution made easy to
+    # hit for records written by the same script invocation or in a fast
+    # automated test/pipeline run -- and that ordering directly drives the
+    # debt calculation's "what happened since X" logic in _compute_debt.
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
 def _content_hash(body: dict) -> str:
     # Identity excludes timestamps, same reasoning as qc-skill's identity scheme
     # (see docs/SPEC.md, Artifact / QCReport): two runs with identical decisions
@@ -114,7 +124,7 @@ def cmd_write(args):
     receipt.pop("created_at", None)
     content_hash = _content_hash(receipt)
     receipt["id"] = content_hash
-    receipt["created_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    receipt["created_at"] = _now_iso()
 
     out_path = receipts_dir(args.project_root) / f"{content_hash}.json"
     with open(out_path, "w", encoding="utf-8") as fh:
@@ -136,7 +146,7 @@ def cmd_write_result(args):
     result["plan_id"] = args.plan_id
     content_hash = _content_hash(result)
     result["id"] = content_hash
-    result["created_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    result["created_at"] = _now_iso()
 
     out_path = results_dir(args.project_root) / f"{content_hash}.json"
     with open(out_path, "w", encoding="utf-8") as fh:
@@ -160,6 +170,7 @@ def cmd_export_csv(args):
         "domain_id", "status", "times_appeared", "times_selected", "times_excluded",
         "max_depth_ever", "runs_since_last_deep", "times_executed",
         "max_verified_depth_ever", "runs_since_last_verified_deep",
+        "diff_checks_since_last_full",
     ]
     writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
@@ -207,9 +218,21 @@ def _compute_debt(project_root: str) -> dict:
     # since staged escalation can stop short of the plan's depth) -- falling back
     # to the plan's depth only for older result records written before that field
     # existed, when execution never stopped short of the plan on its own.
+    #
+    # A result executed against a "diff"-scoped plan (adaptive-audit-plan's
+    # small-diff re-audit option) only looked at a slice of the project, not the
+    # whole domain -- it must never count toward times_executed/
+    # max_verified_depth_ever the way a "full"-scoped result does, or a string of
+    # cheap diff checks would look identical to actually re-verifying the whole
+    # domain. Scope is read from the *plan* the result executed (not the result
+    # itself), since execution can't widen or narrow what the plan already
+    # decided to scope. Tracked separately as diff_checks_since_last_full so the
+    # activity isn't invisible, just not counted as full verification.
     last_verified_deep_index = {}
+    diff_since_full = {}
     for idx, res in enumerate(results):
         plan = receipts_by_id.get(res.get("plan_id"))
+        plan_scope = plan.get("scope", "full") if plan else "full"
         plan_depths = {
             dm["domain_id"]: dm.get("depth")
             for dm in (plan.get("domains", []) if plan else [])
@@ -218,6 +241,9 @@ def _compute_debt(project_root: str) -> dict:
         for dm in res.get("domains", []):
             did = dm["domain_id"]
             entry = debt.setdefault(did, _new_entry(did))
+            if plan_scope == "diff":
+                diff_since_full[did] = diff_since_full.get(did, 0) + 1
+                continue
             entry["times_executed"] += 1
             depth = dm.get("depth_executed") or plan_depths.get(did)
             if depth and (
@@ -227,11 +253,13 @@ def _compute_debt(project_root: str) -> dict:
                 entry["max_verified_depth_ever"] = depth
             if depth == "deep":
                 last_verified_deep_index[did] = idx
+            diff_since_full[did] = 0
 
     for did, entry in debt.items():
         entry["runs_since_last_verified_deep"] = _runs_since(
             results, did, last_verified_deep_index.get(did), key="domains"
         )
+        entry["diff_checks_since_last_full"] = diff_since_full.get(did, 0)
 
     domains = list(debt.values())
     domains.sort(key=lambda e: (-e["runs_since_last_deep"], -e["times_excluded"]))
@@ -243,6 +271,17 @@ def _debt_status(entry: dict) -> str:
     # a human's attention at a glance. Verified (executed) state always wins
     # over planned-only state: a domain nobody has ever actually looked at is
     # worse than one that's merely due for another look.
+    #
+    # The "3" (STALE) and "2" (AGING) thresholds below are a chosen heuristic,
+    # not something calibrated against real audit-cadence data -- there is no
+    # empirical study behind these exact numbers. The reasoning is only:
+    # skipping a domain's Deep verification twice in a row (AGING) is worth
+    # flagging before it becomes three-in-a-row (STALE), i.e. "about to be
+    # forgotten entirely" rather than "just due again". If your own audit
+    # cadence makes these numbers a bad fit (e.g. you run this weekly and
+    # three runs is a few days, or monthly and three runs is a quarter),
+    # treat them as a starting point to change here, not a fixed constant to
+    # design around.
     if entry["times_executed"] == 0:
         if entry["times_selected"] == 0:
             return "UNAUDITED" if entry["times_appeared"] > 0 else "UNKNOWN"
@@ -273,7 +312,10 @@ def _render_report(project_root: str, computed: dict) -> str:
         key=lambda e: (_STATUS_ORDER[_debt_status(e)], -e["runs_since_last_deep"]),
     )
 
-    header = f"{'DOMAIN':<24} {'STATUS':<13} {'VERIFIED DEPTH':<15} {'SINCE DEEP':<11} {'SEL/EXCL':<9}"
+    header = (
+        f"{'DOMAIN':<24} {'STATUS':<13} {'VERIFIED DEPTH':<15} {'SINCE DEEP':<11} "
+        f"{'SEL/EXCL':<9} {'DIFF SINCE FULL':<16}"
+    )
     lines.append(header)
     lines.append("-" * len(header))
     for e in domains:
@@ -281,7 +323,11 @@ def _render_report(project_root: str, computed: dict) -> str:
         verified = e["max_verified_depth_ever"] or "-"
         since = str(e["runs_since_last_deep"])
         sel_excl = f"{e['times_selected']}/{e['times_excluded']}"
-        lines.append(f"{e['domain_id']:<24} {status:<13} {verified:<15} {since:<11} {sel_excl:<9}")
+        diff_since = str(e.get("diff_checks_since_last_full", 0))
+        lines.append(
+            f"{e['domain_id']:<24} {status:<13} {verified:<15} {since:<11} "
+            f"{sel_excl:<9} {diff_since:<16}"
+        )
 
     lines.append("")
     stale_or_worse = [e for e in domains if _debt_status(e) in ("UNAUDITED", "PLANNED-ONLY", "STALE")]
@@ -307,6 +353,12 @@ def _render_report(project_root: str, computed: dict) -> str:
         " it's neglected. Check the plan receipts' own `reasoning` field for that"
         " domain before treating a row here as an actual gap."
     )
+    lines.append(
+        "DIFF SINCE FULL counts diff-scoped re-audits (adaptive-audit-plan's"
+        " small-diff option) since this domain's last full-scope verification --"
+        " real work, but it does not advance VERIFIED DEPTH or SINCE DEEP, since"
+        " it only covered a slice of the domain, not the whole thing."
+    )
 
     return "\n".join(lines)
 
@@ -321,6 +373,7 @@ def _new_entry(did):
         "last_deep_run_index": None,
         "times_executed": 0,
         "max_verified_depth_ever": None,
+        "diff_checks_since_last_full": 0,
     }
 
 
