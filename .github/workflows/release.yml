@@ -1,47 +1,140 @@
 name: release
 
-# Bookkeeping only: tags main and creates a GitHub Release whenever VERSION
-# changes. This project isn't published as a package anywhere (no npm/PyPI,
-# no Claude Code plugin marketplace listing), so this does not update
-# anyone's installed copy -- see CHANGELOG.md for why.
+# Single job, triggered only by push to main -- deliberately NOT split into
+# a "bump on push" workflow plus a "tag pushed -> release" workflow. A push
+# made with the default GITHUB_TOKEN (this job's own commit/tag push below)
+# never triggers another workflow run -- that's GitHub's documented
+# anti-recursion behavior, not a bug to work around. Splitting this into two
+# workflows connected by a tag-push trigger would mean the second workflow
+# never fires at all, since the tag would be pushed by this same token.
+#
+# What this actually produces: VERSION/CHANGELOG.md/marketplace.json
+# bumped and committed, a git tag, and a GitHub Release. There is no
+# package registry publish step with real effect for this repo (no
+# package.json/pyproject.toml exists at the repo root -- see README/
+# CHANGELOG for why), but the publish step below is still wired up and
+# skips itself cleanly when no registry token secret is configured, per
+# the requested design, rather than being omitted outright.
 
 on:
   push:
     branches: [main]
-    paths:
-      - VERSION
 
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Defense in depth on top of the anti-recursion guarantee above: never
+    # act on a commit this same job produced, identifiable by its own
+    # marker in the commit message.
+    if: "!contains(github.event.head_commit.message, '[skip release]')"
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Read version
-        id: version
-        run: echo "tag=v$(tr -d ' \n' < VERSION)" >> "$GITHUB_OUTPUT"
-
-      - name: Skip if this tag already exists
-        id: check
+      - name: Read current VERSION and latest tag
+        id: current
         run: |
-          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
+          version="$(tr -d ' \n' < VERSION)"
+          latest_tag="$(git tag -l 'v*' --sort=-v:refname | head -n1)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$latest_tag" >> "$GITHUB_OUTPUT"
+          echo "tag_version=${latest_tag#v}" >> "$GITHUB_OUTPUT"
+
+      # Only resolves a next version from merged-PR labels since the last
+      # tag -- dry-run: true means this never writes a release or draft
+      # itself; release/tag creation happens explicitly below instead, so
+      # this whole pipeline stays one job. Skipped entirely when VERSION
+      # is already ahead of the latest tag (see "Decide" below) -- that
+      # means a manual bump is pending, and it wins over whatever
+      # release-drafter would have resolved.
+      - name: Resolve next version from PR labels (dry-run)
+        id: resolve
+        if: steps.current.outputs.version == steps.current.outputs.tag_version
+        uses: release-drafter/release-drafter@v7
+        with:
+          dry-run: true
+          config-name: release-drafter.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decide the version to release, if any
+        id: decide
+        env:
+          MANUAL_VERSION: ${{ steps.current.outputs.version }}
+          TAG_VERSION: ${{ steps.current.outputs.tag_version }}
+          RESOLVED_VERSION: ${{ steps.resolve.outputs.resolved_version }}
+        run: |
+          if [ "$MANUAL_VERSION" != "$TAG_VERSION" ]; then
+            # VERSION was already bumped by hand past the last tag --
+            # respect it, don't let an auto-resolved version overwrite it.
+            echo "next=$MANUAL_VERSION" >> "$GITHUB_OUTPUT"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "Manual VERSION bump detected ($TAG_VERSION -> $MANUAL_VERSION); releasing that." >&2
+          elif [ -n "$RESOLVED_VERSION" ] && [ "$RESOLVED_VERSION" != "$TAG_VERSION" ]; then
+            echo "next=$RESOLVED_VERSION" >> "$GITHUB_OUTPUT"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            echo "release-drafter resolved $TAG_VERSION -> $RESOLVED_VERSION from merged PR labels." >&2
           else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing to release (no manual bump, no resolvable version change)." >&2
           fi
 
-      - name: Create tag and GitHub Release
-        if: steps.check.outputs.exists == 'false'
+      - name: Bump VERSION, marketplace.json, and CHANGELOG.md
+        if: steps.decide.outputs.should_release == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          NEXT_VERSION: ${{ steps.decide.outputs.next }}
+          PREV_TAG: ${{ steps.current.outputs.tag }}
         run: |
-          git tag "${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
-          gh release create "${{ steps.version.outputs.tag }}" \
-            --title "${{ steps.version.outputs.tag }}" \
-            --generate-notes
+          python3 scripts/bump_version.py "$NEXT_VERSION" "$PREV_TAG" > /tmp/release-notes.md
+          cat /tmp/release-notes.md
+
+      - name: Commit the bump
+        if: steps.decide.outputs.should_release == 'true'
+        env:
+          NEXT_VERSION: ${{ steps.decide.outputs.next }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION CHANGELOG.md .claude-plugin/marketplace.json
+          git commit -m "chore(release): v${NEXT_VERSION} [skip release]"
+          git push origin HEAD:main
+
+      - name: Tag
+        if: steps.decide.outputs.should_release == 'true'
+        env:
+          NEXT_VERSION: ${{ steps.decide.outputs.next }}
+        run: |
+          git tag "v${NEXT_VERSION}"
+          git push origin "v${NEXT_VERSION}"
+
+      - name: Create GitHub Release
+        if: steps.decide.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NEXT_VERSION: ${{ steps.decide.outputs.next }}
+        run: |
+          gh release create "v${NEXT_VERSION}" \
+            --title "v${NEXT_VERSION}" \
+            --notes-file /tmp/release-notes.md
+
+      - name: Publish to package registry (no-op for this repo)
+        if: steps.decide.outputs.should_release == 'true'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NPM_TOKEN:-}" ]; then
+            echo "No NPM_TOKEN secret configured -- skipping publish."
+            echo "(This repo has no package.json/pyproject.toml to publish anyway;"
+            echo "this step is kept for shape-consistency with a normal release"
+            echo "pipeline, not because a package registry actually applies here.)"
+            exit 0
+          fi
+          echo "NPM_TOKEN is set, but this repo defines no package to publish -- nothing to do."

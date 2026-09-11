@@ -1,0 +1,62 @@
+name: PR autolabel
+
+# Labels merged-PR intent (fix/feature/major/chore) so release.yml's
+# release-drafter dry-run has real labels to resolve the next version
+# from -- without this, every merge would resolve to release-drafter's
+# "default: patch" fallback regardless of what actually changed.
+#
+# pull_request_target (not pull_request) so this also labels PRs opened
+# from forks -- see release-drafter's own README for why plain
+# pull_request can't label fork PRs (the default GITHUB_TOKEN for a
+# pull_request-triggered run from a fork is read-only).
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  # release-drafter's autolabeler adds labels via the GitHub API, which
+  # errors on a label that doesn't already exist in the repo -- this repo
+  # has never used labels before, so create the ones version-resolver and
+  # autolabeler reference (idempotently; a 422 "already_exists" is expected
+  # and ignored on every run after the first).
+  ensure-labels:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = [
+              { name: 'major', color: 'b60205', description: 'Breaking change -- bumps the major version' },
+              { name: 'minor', color: '0e8a16', description: 'New backwards-compatible functionality (bumps minor)' },
+              { name: 'feature', color: '0e8a16', description: 'New backwards-compatible functionality (bumps minor)' },
+              { name: 'fix', color: 'fbca04', description: 'Bug fix (bumps patch)' },
+              { name: 'chore', color: 'cfd3d7', description: 'No functional change -- docs/tests/research (bumps patch, default)' },
+            ]
+            for (const label of labels) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ...label,
+                })
+              } catch (err) {
+                if (err.status !== 422) throw err
+              }
+            }
+
+  autolabel:
+    needs: ensure-labels
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: release-drafter/release-drafter/autolabeler@v7
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

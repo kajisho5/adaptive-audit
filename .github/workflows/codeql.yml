@@ -1,0 +1,51 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, independent of any push -- catches newly-published CodeQL
+    # query/vuln coverage against unchanged code, not just new commits.
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # The only real source in this repo: scripts/bump_version.py, both
+        # scripts/receipts.py copies, and tests/*.py. Everything else is
+        # Markdown (SKILL.md, docs) or JSON, neither of which CodeQL
+        # analyzes as code.
+        language: ['python']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # evals/fixtures/**'s package.json/requirements.txt-bearing
+          # projects (webapp-auth-payment, task-api,
+          # internal-tool-hidden-secret, cli-data-processor) are frozen,
+          # deliberately-vulnerable synthetic test corpora for
+          # adaptive-audit-execute/-plan's own evals -- CodeQL flagging
+          # their seeded bugs would be noise about this repo's own code,
+          # not a real finding, so they're excluded here the same way
+          # .github/dependabot.yml excludes them from dependency updates.
+          config: |
+            paths-ignore:
+              - evals/fixtures/**
+
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:${{ matrix.language }}'

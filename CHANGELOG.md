@@ -19,6 +19,10 @@ Claude Code marketplace (`.claude-plugin/marketplace.json` — see README
 path (`/plugin marketplace update`). Keep that file's plugin `version`
 field in sync with this one — `tests/test_versioning.py` enforces it.
 
+## [Unreleased]
+
+Nothing yet.
+
 ## [0.1.0] — first tracked release
 
 The first version tag, covering everything merged up to this point (PR #1
@@ -55,7 +59,17 @@ is retroactive, not a description of what changed since some prior tag.
   works identically either way.
 - Validated across several real, third-party projects (not just synthetic
   fixtures) — full history in `evals/validation-notes.md`.
-
-## [Unreleased]
-
-Nothing yet.
+- Full GitHub repo automation: a single-job release workflow that resolves
+  the next version from merged-PR labels via `release-drafter` (dry-run),
+  respects a manual `VERSION` bump instead of overwriting it, updates
+  `VERSION`/`CHANGELOG.md`/`marketplace.json` and creates the tag + GitHub
+  Release in one run (no tag-push-triggered second workflow, since a push
+  made with the default `GITHUB_TOKEN` never triggers another run); PR
+  autolabeling so that resolution has real labels to read; Dependabot
+  (`github-actions` only — see `.github/dependabot.yml` for why fixture
+  ecosystems are deliberately excluded); CodeQL scoped to this repo's own
+  Python source (`scripts/`, `receipts.py` copies, `tests/`), explicitly
+  excluding `evals/fixtures/**`'s deliberately-vulnerable synthetic
+  projects; a PR template matching this repo's actual Summary/Test plan
+  convention; and `SECURITY.md` pointing at GitHub's private vulnerability
+  reporting flow.

@@ -123,16 +123,22 @@ analysis, feature matrix, and naming investigation behind these decisions.
   project that's pure, deterministic logic rather than LLM output, so it's
   the one part an automated test suite can actually protect — `SKILL.md`
   behavior itself is still checked by hand-run evals in `evals/`, not CI.
-- `VERSION` / `CHANGELOG.md` — version bookkeeping. Bumping `VERSION` on
-  `main` makes `.github/workflows/release.yml` tag it and create a GitHub
-  Release with auto-generated notes. This is also the version the
-  `.claude-plugin/marketplace.json` plugin entry must be kept in sync with
-  (enforced by `tests/test_versioning.py`) — see the "Install as a plugin"
-  section below for what that's actually for.
+- `VERSION` / `CHANGELOG.md` — version bookkeeping, auto-maintained by
+  `.github/workflows/release.yml` + `scripts/bump_version.py` (see
+  "Repository automation" below) once a merge lands on `main`. `VERSION`
+  is also the version the `.claude-plugin/marketplace.json` plugin entry
+  must be kept in sync with (enforced by `tests/test_versioning.py`) — see
+  "Install as a plugin" below for what that's actually for.
 - `.claude-plugin/marketplace.json` — makes this repo self-hostable as a
   single-plugin Claude Code marketplace, so an installed copy can actually
   be updated with a command instead of a manual re-copy. See "Install as a
   plugin" below.
+- `scripts/bump_version.py` — this repo's own release-version/changelog
+  logic (not a skill script; those live under each skill's own `scripts/`).
+  See "Repository automation" below.
+- `SECURITY.md` — points to GitHub's private vulnerability reporting flow
+  for this repo itself; unrelated to `adaptive-audit-execute`'s own
+  security-domain audit findings about a *target* project.
 
 ## Usage
 
@@ -166,6 +172,52 @@ Either way, just ask "バグチェックして" — that produces a plan and the
 actually runs it in one go, without needing a second command. Ask for
 "計画だけ欲しい" / "何を確認すべきか教えて" instead if you only want the
 scoping decision without it being carried out yet.
+
+## Repository automation
+
+This repo's own GitHub automation (not the skills' behavior):
+
+- **`.github/workflows/release.yml`** — a single job on every push to
+  `main`: resolves the next version from merged-PR labels via
+  `release-drafter` (dry-run only — it never creates its own release),
+  respects a manual `VERSION` bump instead of overwriting it (auto-bump
+  only fires when `VERSION` still matches the latest tag), then runs
+  `scripts/bump_version.py` to update `VERSION`/`CHANGELOG.md`/
+  `.claude-plugin/marketplace.json`, commits, tags, and creates the GitHub
+  Release — all in one job, deliberately not split by a tag-push trigger
+  (a push made with the default `GITHUB_TOKEN`, like this job's own commit
+  and tag, never triggers another workflow run, so a second,
+  tag-triggered workflow would simply never fire). There's a publish step
+  too, wired to skip cleanly since this repo has no npm/PyPI package to
+  publish — see the workflow's own comments.
+- **`.github/workflows/autolabel.yml`** — applies `major`/`feature`/
+  `fix`/`chore` labels to merged PRs (via `release-drafter`'s autolabeler,
+  triggered on `pull_request_target` so it also covers fork PRs), which is
+  what gives `release.yml` real labels to resolve a version from instead
+  of always falling back to its `patch` default. Also creates those 5
+  labels on first run if they don't already exist yet.
+- **`.github/dependabot.yml`** — `github-actions` only. Deliberately
+  excludes the `package.json`/`requirements.txt` files under
+  `evals/fixtures/*/` — those are frozen, sometimes-deliberately-vulnerable
+  synthetic test corpora for the skills' own evals, not live dependencies
+  of this repo.
+- **`.github/workflows/codeql.yml`** — scans this repo's actual Python
+  source (`scripts/bump_version.py`, both `receipts.py` copies,
+  `tests/*.py`) on every PR, push to `main`, and weekly; explicitly
+  excludes `evals/fixtures/**` for the same reason Dependabot does.
+- **`.github/pull_request_template.md`** — matches this repo's existing
+  Summary/Test plan PR convention.
+- **`SECURITY.md`** — points to GitHub's private vulnerability reporting
+  flow, not a personal contact address.
+
+`scripts/bump_version.py` (the core version-bump/changelog-generation logic
+behind `release.yml`) reads commit subjects via `git log` at runtime rather
+than interpolating any PR title, commit message, or other untrusted string
+directly into a `${{ }}`-templated shell command — the known GitHub Actions
+script-injection pattern this is written to avoid. Covered by
+`tests/test_bump_version.py`, including a test that a commit subject
+containing shell metacharacters (`` $(...) ``, backticks, quotes) ends up
+as literal text in `CHANGELOG.md`, never executed.
 
 ## Cost
 

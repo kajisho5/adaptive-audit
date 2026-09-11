@@ -1115,3 +1115,94 @@ fires post-install, running `/plugin marketplace update` after a new
 commit) — the facts above are verified against documentation, not by
 actually exercising the install flow in this project's own validation
 history yet.
+
+## Iteration 19 — full repo automation: release pipeline, autolabel, Dependabot, CodeQL, PR template, SECURITY.md
+
+Requested as a complete package: a comprehensive, explicitly-specified set
+of GitHub repo automation, added only where a prior investigation confirmed
+it didn't already exist. Investigation first: no `package.json`/
+`pyproject.toml`/`requirements.txt` at the repo root (only inside
+`evals/fixtures/*/`, which are frozen synthetic test corpora, not this
+repo's own dependencies); real source is Python only
+(`scripts/bump_version.py`, both `receipts.py` copies, `tests/*.py`); prior
+`.github/` contents were exactly `workflows/test.yml` and the
+simpler VERSION-push-triggered `workflows/release.yml` from iteration
+17 — no Dependabot, no PR template, no CODEOWNERS, no SECURITY.md, no
+CodeQL, no labels ever used on either of the repo's 2 PRs to date.
+
+**Verified before implementing, not assumed**, since a wrong config key
+silently no-ops rather than erroring: `release-drafter`'s action inputs/
+outputs (fetched `action.yml` directly — confirmed `dry-run`, `resolved_version`
+et al.), its `version-resolver`/`categories`/`autolabeler` config schema
+(fetched `schema.json` and the README's autolabeler section directly,
+since an initial broad README fetch's summary had missed the
+`version-resolver` schema entirely — re-fetched narrowly and found it),
+and the exact autolabeler sub-action reference (`release-drafter/
+release-drafter/autolabeler@v7`, from a verified README example, not
+guessed from the main action's own tag). Confirmed the docs are silent on
+whether the autolabeler auto-creates missing GitHub labels — rather than
+gamble on undocumented behavior, `autolabel.yml` creates the 5 needed
+labels itself (idempotently, via `actions/github-script`, tolerating a 422
+"already exists") before the autolabeler step runs. Also verified
+`github/codeql-action/init`'s `config` input (inline YAML, same shape as
+`config-file`) directly from its `action.yml`, used to exclude
+`evals/fixtures/**` from CodeQL analysis.
+
+**Single-job release design, per the explicit anti-recursion requirement**:
+`release.yml` runs entirely in one job on push to `main` — resolve version
+(release-drafter dry-run, skipped if `VERSION` is already ahead of the
+latest tag) → decide → bump `VERSION`/`CHANGELOG.md`/`marketplace.json`
+(`scripts/bump_version.py`) → commit → tag → GitHub Release → publish
+(no-op here, no package registry applies to this repo, but wired to skip
+cleanly rather than omitted). Never split across a push-triggered and a
+tag-triggered workflow: a push made with the default `GITHUB_TOKEN` (this
+job's own commit/tag push) never triggers another workflow run, so a
+second, tag-triggered workflow would simply never fire — exactly the
+pitfall specified up front, and the reason this replaced iteration 17's
+simpler two-piece-ready design with one consolidated job instead.
+
+**Script-injection avoidance, and a concrete test for it**:
+`scripts/bump_version.py` builds the changelog section from `git log`
+output captured via `subprocess` with an explicit argv list — never by
+interpolating a PR title, commit message, or other untrusted string
+directly into a `${{ }}`-templated shell command, the documented GitHub
+Actions script-injection pattern. `tests/test_bump_version.py`'s
+`test_commit_subjects_are_not_shell_evaluated` makes this concrete: a
+commit subject containing `` $(touch pwned) ``, backticks, and quotes ends
+up as literal, unexecuted text in `CHANGELOG.md` — confirmed by asserting
+the file `pwned` was never created.
+
+**Isolated-fixture testing, exactly as specified**: `scripts/bump_version.py`
+was manually exercised against a throwaway git repo under `/tmp`
+(`pwd` checked before and after every step) covering the normal case
+(prior tag exists, commits since it become the new section), the
+first-ever-release case (no prior tag), the no-`[Unreleased]`-marker
+fallback path, and the shell-metacharacter commit subject — catching and
+fixing a real formatting bug in the same pass (the newly-inserted section
+ran directly into the next `## [` heading with no blank line, from an
+`.lstrip("\n")` that stripped one newline too many). The throwaway fixture
+was deleted afterward and the real repo's own `VERSION`/`CHANGELOG.md`
+confirmed untouched by any of this. `tests/test_bump_version.py` (5 tests)
+now covers the same ground permanently, for a total of 26 tests (up from
+21).
+
+**Judgment calls made and disclosed, not left implicit**: `evals/fixtures/**`
+excluded from both Dependabot and CodeQL (deliberately-vulnerable/stale
+test corpora, not live dependencies or real findings about this repo);
+`autolabeler` patterns are keyword-based (`\bfix\b`, `\badd|feat|feature\b`,
+etc.) rather than assuming Conventional-Commits-style title prefixes
+(`feat:`, `fix:`), since neither of this repo's two real PR titles to date
+used that convention; `release-drafter.yml`'s changelog/body templates are
+present but functionally unused, since `bump_version.py` and `release.yml`
+own actual changelog/release generation directly — only its
+`version-resolver` config is load-bearing.
+
+**Not yet validated**: this entire pipeline still needs a real merge to
+`main` with a labeled PR to confirm end-to-end (autolabel actually firing
+on a real PR, the version resolving correctly from that label, the commit/
+tag/release sequence actually succeeding against the real repo's branch
+protection settings, if any — direct-push-back-to-main from a workflow can
+be blocked by branch protection depending on how it's configured, which
+this iteration could not check from inside a session with git access but
+not the repo's branch-protection settings). Documented as a known
+follow-up, not silently assumed to work.
