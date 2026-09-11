@@ -53,7 +53,7 @@ Most "review my code" tools run the same fixed checklist — usually security-on
 /plugin install adaptive-audit@adaptive-audit
 ```
 
-Then just talk to your agent, in whatever language you normally use — Japanese isn't required, it's just this project's own author's habitual phrasing throughout this README:
+Then just talk to your agent, in any language:
 
 > "check this for bugs" / "バグチェックして"
 
