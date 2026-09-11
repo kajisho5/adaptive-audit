@@ -21,67 +21,13 @@ field in sync with this one — `tests/test_versioning.py` enforces it.
 
 ## [Unreleased]
 
-- Added `LICENSE` (MIT) and `CONTRIBUTING.md` — both were missing, which
-  blocked this repo from actually being usable as OSS despite the plugin
-  marketplace distribution path already documented in this README.
-- README: added a "How this compares to existing tools" section stating
-  plainly, not just via a linked research doc, that a security-only need is
-  already well covered by `cloudflare/security-audit-skill` or
-  `dinosn/raptor-loop-hunt`, and that the Remediate step is not part of this
-  project's differentiation (it overlaps with Anthropic's own
-  `/security-review` and Snyk's official Claude Skill).
-- `scripts/receipts.py` (both copies): documented that `_debt_status`'s
-  STALE/AGING thresholds (3/2 runs) are a disclosed, uncalibrated heuristic,
-  not a measured constant — a prior gap where the reasoning existed only in
-  a reviewer's head, not in the code.
-- `adaptive-audit-execute` step 6 (Remediate): two more real trials (iteration
-  21), closing two of the three gaps iteration 20 left open — a PR request
-  against a repo with no remote at all, and a first non-Python (Go) target.
-  Both found real wording gaps, both fixed directly in `SKILL.md`: step 6.4
-  now states that a requested end-state 6.2 already found impossible (e.g.
-  no remote to push to) does not retroactively authorize a lesser
-  unrequested action like committing locally; step 6.3 now generalizes the
-  "a regression test must be shown to have the power to catch the bug, not
-  just assumed to" principle to concurrency findings specifically (verify
-  the new test fails against the unfixed code, via the ecosystem's race
-  detector, before trusting it against the fix), stated as the same
-  underlying principle as the performance case rather than a one-off carve
-  out.
-- `adaptive-audit-execute` step 6 (Remediate): a third trial (iteration 22)
-  closes the last originally-flagged gap — two CONFIRMED findings fixed in
-  one turn from a plain "直して" naming neither, confirming step 6.1's
-  "default to every CONFIRMED finding" actually holds under real
-  multi-finding load, with scope discipline verified to hold too (a third,
-  real but not-CONFIRMED issue in the same fixture was left untouched).
-  Step 6.3's "prove the test has power to catch the bug" principle was
-  applied by the trial's own subagent, unprompted, to a third bug class
-  (SQL injection) it isn't named for — no further `SKILL.md` change judged
-  necessary from this trial. Across iterations 20-22, step 6 has now been
-  exercised on Python, Go, and Node targets, across performance,
-  concurrency, and injection bug classes, and across single/multi-finding
-  and push-possible/impossible requests — five independently-verified
-  trials total, see `evals/validation-notes.md`.
-- `adaptive-audit-execute` step 6 (Remediate) validated with a real subagent
-  trial against a disposable copy of the `cli-data-processor` fixture (see
-  `evals/validation-notes.md` iteration 20) — the fix itself worked
-  correctly (O(n·m) → O(n+m), ~500x faster, verified with a benchmark and a
-  new regression test, nothing staged or committed). The trial found two
-  real wording gaps, both fixed directly in `SKILL.md` from that evidence:
-  6.2's "state this up front" is now explicit that it must be its own
-  message sent before any file is touched, not folded into the completion
-  report; 6.3 now says to prefer a structural regression test over a flaky
-  timing assertion for performance/complexity findings specifically.
-- `adaptive-audit-execute`: a new opt-in Remediate step (step 6), triggered
-  only by a separate, explicit follow-up request after an audit ("直して",
-  "直してPRにして") — never inferred from a finding's severity or an audit's
-  own `overall_status`. Fixes CONFIRMED findings minimally (one at a time,
-  scoped to each finding's own `failure_scenario`), adds/runs tests where a
-  test runner exists, and never commits or pushes without being asked to.
-  Checks and discloses up front whether this session can actually write to
-  the target project and, if a PR was asked for, whether it can push to or
-  open a PR against that remote — surfacing a missing push credential before
-  writing anything, not after. Does not write to `receipts.py`: a fix is not
-  the same claim as re-verifying a domain's audit debt.
+Nothing yet.
+
+## [0.1.0] - 2026-09-11
+
+- Invariant extraction trials 3-4, engineering hardening, and full repo automation (#8)
+- Adaptive audit: research + plan/execute skills, validated on 3 real projects
+- Initial commit
 
 ## [0.1.0] — first tracked release
 
