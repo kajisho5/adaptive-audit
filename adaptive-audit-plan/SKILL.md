@@ -54,6 +54,56 @@ If this returns `"total_runs": 0` (or the command errors because no history
 exists yet), say so plainly in the output and proceed — this is expected on a
 project's first run, not a failure.
 
+### 0.5. Check for a small-diff re-audit opportunity — and let the person decide, don't decide for them
+
+Skip this step entirely if step 0 found no history (`total_runs: 0`), if this
+project isn't a git repository, or if this run is already in dry-run mode.
+Otherwise:
+
+1. From `list-results` (falling back to `list` if no execution results exist
+   yet), find the most recent record whose `scope` is `"full"` or absent
+   (legacy records with no `scope` field are full-scope by definition) **and**
+   that has a `git_commit` field. If none exists, skip this step — there's
+   nothing to diff against yet.
+2. Run `git diff --shortstat <that commit>..HEAD -- .` (and `git ls-files | wc
+   -l` for the project's total tracked file count) to measure how much has
+   actually changed since that commit.
+3. Only offer diff-mode when the change is **clearly small**: changed files
+   are both ≤15% of the project's total tracked files **and** ≤20 files in
+   absolute terms. If the diff is larger than that, don't ask — proceed
+   straight to step 1 as a full-scope run, the same as always. This
+   deliberately errs toward not bothering the person with a choice that isn't
+   a real cost/thoroughness tradeoff yet.
+4. If the diff qualifies, **ask the person directly** (via `AskUserQuestion`
+   if available, otherwise as a plain question in the response, and wait for
+   an answer before proceeding) rather than picking one silently. Show them
+   what they need to actually decide, not just "small or large":
+   - The base commit, its age, and the changed file/line count.
+   - Which domains currently have real accumulated debt (STALE/UNAUDITED/
+     PLANNED-ONLY per step 0's `report`) — a diff-only pass will **not**
+     touch those, so choosing it means that debt keeps aging. Say this
+     plainly; don't let the speed/cost upside hide this cost.
+   - The two options: **diff-only** (fast, cheap, scoped to what actually
+     changed) vs. **full** (re-examines everything, including domains with
+     existing debt).
+5. If they choose **diff-only**: this run's `scope` is `"diff"`. Scope step 2's
+   project inspection, step 3-4's domain scoring, and (in
+   `adaptive-audit-execute`) the actual Hunt passes to the changed files
+   themselves plus their direct blast radius (grep for what imports/calls
+   them elsewhere in the repo — don't re-read the whole project). Record
+   `diff_base_commit` (the commit diffed against) and `diff_files` (the
+   changed file list) in the `plan_record`, alongside `"scope": "diff"`.
+6. If they choose **full**, or this step was skipped or didn't qualify: this
+   run's `scope` is `"full"` (the default — always set it explicitly in the
+   `plan_record` even when nothing about this step applied, since
+   `adaptive-audit-execute`'s debt calculation needs every plan's scope to
+   read reliably, not just diff-scoped ones).
+
+Either way, record the current `git_commit` (`git rev-parse HEAD`, if this is
+a git repo) in the `plan_record` — this is what makes the *next* run's step
+0.5 possible. A project with no git history simply never qualifies for this
+step; that's a known, accepted limitation, not something to work around.
+
 ### 1. Interpret the request
 
 Note, without over-fitting to exact wording:
@@ -242,6 +292,13 @@ language; keep the JSON block's keys as-is):
  say this is the first recorded run for this project. Reading history is safe
  in dry-run mode too — only step 7's write is skipped, not step 0's read.)
 
+## 差分監査の判断
+(only include this section when step 0.5 actually ran and found a qualifying
+ small diff: the base commit and how much changed, which domains have
+ existing debt a diff-only pass wouldn't touch, which option was chosen and
+ by whom (the person, via the question step 0.5 asked) — omit this section
+ entirely, don't just say "N/A", when step 0.5 didn't apply)
+
 ## リクエストの解釈
 (what was explicitly asked, what scope/depth was implied, what was left open)
 
@@ -273,6 +330,10 @@ language; keep the JSON block's keys as-is):
 {
   "schema_version": "1.0",
   "request": "<the original request, verbatim>",
+  "scope": "full | diff (see step 0.5 -- always set, default is \"full\")",
+  "git_commit": "<git rev-parse HEAD, if this is a git repo -- omit otherwise>",
+  "diff_base_commit": "<only when scope is \"diff\": the commit diffed against>",
+  "diff_files": ["<only when scope is \"diff\": the changed files>"],
   "domains": [
     {
       "domain_id": "<one id from references/audit-domains.md, e.g. \"security\">",

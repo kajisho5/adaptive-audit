@@ -909,3 +909,69 @@ own conclusion and the "How to invoke it" section in
 one explicit lens, not one generic pass) — reviewed during this pass and
 confirmed no further change was needed here; this weakness was already
 closed by prior work, not newly fixed now.
+
+## Iteration 16 — diff-scoped re-audit (addressing the cost weakness directly)
+
+Direct follow-up to the cost weakness left open in iteration 15: the project
+always re-examines a whole project every run, even when almost nothing has
+changed since the last full audit. Added `adaptive-audit-plan` step 0.5: for
+a project with git history and a prior full-scope audit recorded, if the
+diff since that audit's commit is clearly small (≤15% of tracked files and
+≤20 files absolute), the plan step **asks the person to choose** between a
+cheap diff-only re-audit (scoped to the changed files and their direct blast
+radius) and a full re-audit — surfacing which domains currently carry real
+accumulated debt that a diff-only pass would leave untouched, rather than
+silently picking one or the other. This design (ask, don't decide, when the
+choice is real; show the debt cost of the cheap option) came directly out of
+a conversation about how to close this specific weakness, not from an
+eval run — worth naming as its origin.
+
+**Why a choice, not an automatic decision**: a diff-only pass isn't strictly
+better than a full one — it's cheaper but structurally blind to anything
+outside the diff, including whatever a domain's existing accumulated debt
+already represents. Automatically defaulting to diff-mode whenever it
+qualifies would quietly let real debt accumulate indefinitely on any project
+that only ever gets small incremental changes between audits. Automatically
+defaulting to full mode whenever a smaller option exists defeats the point
+of adding it. Neither default is honestly always right, so the plan asks
+instead of picking — the same principle as this project's existing
+dry-run/read-only handling (a real constraint the skill honors rather than
+silently overriding).
+
+**`receipts.py` changes, tested**: a `"diff"`-scoped plan's execution results
+must not count as verifying the whole domain the way a `"full"`-scoped
+result does — `_compute_debt` now reads `scope` from the *plan* a result
+executed (not the result itself, since execution can't widen or narrow what
+the plan already decided), and diff-scoped results are tracked separately as
+`diff_checks_since_last_full` rather than advancing `times_executed`/
+`max_verified_depth_ever`. `report`'s table gained a `DIFF SINCE FULL`
+column and `export-csv` a matching field. 4 new pytest tests cover: a
+diff-scoped result doesn't count as full verification; a full-scope result
+after one or more diff-scoped ones resets the counter and records real
+verification; both existing behaviors were exercised end-to-end via the
+actual CLI (subprocess calls), not just the internal `_compute_debt`
+function directly.
+
+**A real latent bug found and fixed while writing these tests, not before**:
+the first version of the reset test failed because `_load_all`'s sort falls
+back to glob (content-hash) order whenever two records tie on `created_at`,
+and `created_at` was only second-resolution — two results written by the
+same script invocation or a fast automated run can easily land in the same
+wall-clock second, at which point their relative order in every debt
+calculation becomes arbitrary rather than reflecting when they were actually
+written. This is not a new bug introduced by diff-scoping; it's a
+pre-existing property of the timestamp format that the new tests were simply
+the first to be sensitive enough to expose (nothing before this needed
+sub-second ordering to tell two records apart). Fixed by switching
+`created_at` to microsecond-precision ISO-8601 timestamps
+(`_now_iso()`); both `receipts.py` copies re-synced, all 19 tests (15 from
+iteration 15, 4 new) pass on both.
+
+**Not yet validated**: this has only been exercised through `receipts.py`'s
+own logic (verified deterministically) and the CLI directly — no real agent
+run has yet gone through `adaptive-audit-plan` step 0.5's own judgment (git
+diff sizing, presenting the choice via `AskUserQuestion`, correctly scoping
+a diff-mode Hunt to blast radius rather than the whole project). That's the
+next real-world validation gap for this feature, the same way staged
+depth-escalation (iteration 10) wasn't validated on a real project until
+iteration 11.

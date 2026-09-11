@@ -69,6 +69,20 @@ this skill carries out a decision, it doesn't second-guess it. If the user wants
 a previously-excluded domain audited too, that's a new planning input, not
 something for this skill to decide on its own.
 
+**If the plan's `scope` is `"diff"`** (adaptive-audit-plan's step 0.5 —
+offered only for a change small enough to ask about, and only after the
+person explicitly chose it over a full re-audit): every Hunt pass below stays
+scoped to the plan's `diff_files` plus whatever else a hunter needs to trace
+their direct blast radius (what imports/calls them elsewhere) — never treat
+a `"diff"`-scoped plan as license to read the whole project the way a
+`"full"`-scoped one does. State the scope plainly in the 実行サマリー either
+way (`"full"` is the default and usually not worth calling out; `"diff"`
+always is, along with the base commit and file list, since it means real
+audit debt on other domains was consciously left untouched this run — see
+`scripts/receipts.py`'s `diff_checks_since_last_full` tracking, which exists
+specifically so this narrower kind of run is visible in the debt history
+rather than silently indistinguishable from a full verification).
+
 ### 1. Hunt (per domain, isolated)
 
 For each selected domain, in order, dispatch a **fresh subagent with no visibility

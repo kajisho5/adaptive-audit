@@ -73,6 +73,17 @@ least-proven idea in the original research, and two successful trials (both
 still scoped to auth/access-control-shaped invariants) is real evidence, not
 yet enough to make it a default step for every run or every domain.
 
+For a project that's already been fully audited once and only changed a
+little since, `adaptive-audit-plan` (step 0.5) can offer a cheaper **diff-only
+re-audit**, scoped to what actually changed (plus its direct blast radius)
+instead of the whole project — but only when the change is clearly small
+(≤15% of tracked files and ≤20 files), and it **asks rather than decides**:
+it shows which domains have real accumulated debt a diff-only pass wouldn't
+touch, then lets the person choose between diff-only and full. Diff-scoped
+runs are tracked separately in `receipts.py`'s debt calculation
+(`diff_checks_since_last_full`) so they're visible without being mistaken
+for actually re-verifying the whole domain.
+
 See `research/adaptive-audit-competitive-research.md` for the full competitive
 analysis, feature matrix, and naming investigation behind these decisions.
 

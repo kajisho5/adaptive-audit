@@ -178,6 +178,87 @@ def test_export_csv_matches_debt(script, tmp_path):
     assert any(line.startswith("security,") for line in lines[1:])
 
 
+def test_diff_scoped_result_does_not_count_as_full_verification(script, tmp_path):
+    # A result executed against a plan with "scope": "diff" (adaptive-audit-plan's
+    # small-diff re-audit option) only looked at a slice of the project. It must
+    # not advance times_executed/max_verified_depth_ever the way a full-scope
+    # result does -- otherwise a string of cheap diff checks would look
+    # identical to actually re-verifying the whole domain.
+    home = tmp_path / "home"
+    project = tmp_path / "project"
+    project.mkdir()
+    plan = write_json(tmp_path, "plan.json", {
+        "scope": "diff",
+        "diff_base_commit": "deadbeef",
+        "diff_files": ["src/app.py"],
+        "domains": [
+            {"domain_id": "correctness", "selected": True, "depth": "standard", "reasoning": "x"},
+        ],
+    })
+    r = run(script, home, "write", "--project-root", str(project), str(plan))
+    assert r.returncode == 0, r.stderr
+    plan_id = json.loads(Path(r.stdout.strip()).read_text(encoding="utf-8"))["id"]
+
+    result = write_json(tmp_path, "result.json", {
+        "domains": [
+            {"domain_id": "correctness", "depth_executed": "standard",
+             "confirmed_findings": 1, "plausible_findings": 0, "rejected_findings": 0},
+        ]
+    })
+    r = run(script, home, "write-result", "--project-root", str(project),
+            "--plan-id", plan_id, str(result))
+    assert r.returncode == 0, r.stderr
+
+    r_debt = run(script, home, "debt", "--project-root", str(project))
+    debt = json.loads(r_debt.stdout)
+    entry = next(e for e in debt["domains"] if e["domain_id"] == "correctness")
+    assert entry["times_executed"] == 0
+    assert entry["max_verified_depth_ever"] is None
+    assert entry["diff_checks_since_last_full"] == 1
+
+
+def test_full_scope_result_after_diff_resets_counter(script, tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "project"
+    project.mkdir()
+
+    diff_plan = write_json(tmp_path, "diff_plan.json", {
+        "scope": "diff",
+        "domains": [
+            {"domain_id": "reliability", "selected": True, "depth": "standard", "reasoning": "x"},
+        ],
+    })
+    r = run(script, home, "write", "--project-root", str(project), str(diff_plan))
+    assert r.returncode == 0, r.stderr
+    diff_plan_id = json.loads(Path(r.stdout.strip()).read_text(encoding="utf-8"))["id"]
+
+    diff_result = write_json(tmp_path, "diff_result.json", {
+        "domains": [{"domain_id": "reliability", "depth_executed": "standard",
+                     "confirmed_findings": 0, "plausible_findings": 0, "rejected_findings": 0}]
+    })
+    r = run(script, home, "write-result", "--project-root", str(project),
+            "--plan-id", diff_plan_id, str(diff_result))
+    assert r.returncode == 0, r.stderr
+
+    full_plan_id = _write_plan_and_get_id(script, home, project, [
+        {"domain_id": "reliability", "selected": True, "depth": "standard", "reasoning": "y"},
+    ], tmp_path)
+    full_result = write_json(tmp_path, "full_result.json", {
+        "domains": [{"domain_id": "reliability", "depth_executed": "standard",
+                     "confirmed_findings": 1, "plausible_findings": 0, "rejected_findings": 0}]
+    })
+    r = run(script, home, "write-result", "--project-root", str(project),
+            "--plan-id", full_plan_id, str(full_result))
+    assert r.returncode == 0, r.stderr
+
+    r_debt = run(script, home, "debt", "--project-root", str(project))
+    debt = json.loads(r_debt.stdout)
+    entry = next(e for e in debt["domains"] if e["domain_id"] == "reliability")
+    assert entry["times_executed"] == 1
+    assert entry["max_verified_depth_ever"] == "standard"
+    assert entry["diff_checks_since_last_full"] == 0
+
+
 def test_report_flags_unaudited_selected_domain(script, tmp_path):
     home = tmp_path / "home"
     project = tmp_path / "project"
