@@ -1,6 +1,6 @@
-<h1 align="center">adaptive-audit</h1>
-
-<p align="center"><strong>Give your coding agent a real audit process, not a checklist.</strong></p>
+<p align="center">
+  <img src="assets/logo.png" alt="adaptive-audit — give your coding agent a real audit process, not a checklist" width="720">
+</p>
 
 <p align="center">
   Domain-agnostic scoping · Isolated Hunt → Verify · Cross-run Audit-Debt tracking<br>
