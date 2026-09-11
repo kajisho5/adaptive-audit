@@ -34,6 +34,19 @@ field in sync with this one — `tests/test_versioning.py` enforces it.
   STALE/AGING thresholds (3/2 runs) are a disclosed, uncalibrated heuristic,
   not a measured constant — a prior gap where the reasoning existed only in
   a reviewer's head, not in the code.
+- `adaptive-audit-execute` step 6 (Remediate): two more real trials (iteration
+  21), closing two of the three gaps iteration 20 left open — a PR request
+  against a repo with no remote at all, and a first non-Python (Go) target.
+  Both found real wording gaps, both fixed directly in `SKILL.md`: step 6.4
+  now states that a requested end-state 6.2 already found impossible (e.g.
+  no remote to push to) does not retroactively authorize a lesser
+  unrequested action like committing locally; step 6.3 now generalizes the
+  "a regression test must be shown to have the power to catch the bug, not
+  just assumed to" principle to concurrency findings specifically (verify
+  the new test fails against the unfixed code, via the ecosystem's race
+  detector, before trusting it against the fix), stated as the same
+  underlying principle as the performance case rather than a one-off carve
+  out. Still not validated: fixing more than one finding in the same turn.
 - `adaptive-audit-execute` step 6 (Remediate) validated with a real subagent
   trial against a disposable copy of the `cli-data-processor` fixture (see
   `evals/validation-notes.md` iteration 20) — the fix itself worked

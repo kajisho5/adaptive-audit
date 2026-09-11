@@ -404,6 +404,21 @@ prefer a structural regression test that would fail if the fix were reverted
 counts to an expensive operation stay bounded), and only fall back to an
 actual timing comparison when no such structural signal exists.
 
+For a concurrency/race-condition finding, a bare pass/fail test run is not
+enough evidence either, for the opposite reason a timing assertion is weak
+for performance: a data race is non-deterministic, so a plain `go test` (or
+equivalent) can easily pass even against the *original*, still-buggy code —
+proving nothing. Use the ecosystem's race/thread-safety detector where one
+exists (e.g. Go's `go test -race`, C/C++'s ASan/TSan) and **verify the new
+test actually fails against the unfixed code first**, then verify it passes
+against the fix — an A/B check, not a single after-the-fact run. This is the
+same underlying principle as the performance case above (a test claiming to
+"catch" a bug must be shown to actually have the power to catch it, not just
+assumed to), applied to a bug class where the failure mode is different. For
+a bug class this doesn't name specifically, apply that same principle by
+judgment rather than treating its absence from this list as license to skip
+verifying the test's power to fail on the original code.
+
 **6.4 Never commit or push without being asked to, and never overclaim what
 happened.** Writing the fix to the working tree is what a plain "直して"
 asked for — nothing more. Staging, committing, pushing, and opening a PR are
@@ -414,6 +429,18 @@ imply the next. In every response from this step, state exactly which of
 and which of those the person still needs to do themselves or which this
 session genuinely cannot do (e.g. no push access to that remote) — never leave
 that ambiguous.
+
+A request that names an end-state 6.2 already determined is impossible from
+this session ("直してPRにして" when there's no remote at all, or no push
+credential for it) does **not** retroactively authorize committing as a
+consolation step. The person asked for a PR, not "commit as far as you can
+get" — those are different requests, and reaching for the closest available
+one without being asked is exactly the kind of unrequested escalation this
+step exists to avoid. Leave the fix, tested and verified, in the working
+tree; state plainly that the PR/push portion couldn't be attempted and why;
+let the person decide the next step (add a remote, push it themselves,
+explicitly ask for a local commit, or something else) rather than guessing
+which partial version of their request to fulfill.
 
 **6.5 This step never touches `receipts.py`.** Fixing a finding is not the same
 claim as re-verifying its domain, and recording one here would corrupt the

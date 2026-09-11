@@ -1103,11 +1103,97 @@ directly in `SKILL.md` from this trial's evidence, not speculatively:**
    test over a timing assertion for performance/complexity findings)
    instead of leaving it to be independently rediscovered on every run.
 
-**Not yet validated**: a trial where push/PR access is actually requested
-and actually absent (this trial's scenario never asked for it, so 6.2's
-push-specific branch and 6.4's "PR opened: no" reporting path went
-untested); a trial fixing more than one finding at once; a trial against a
-finding in a language/toolchain other than Python.
+**Not yet validated**: a trial fixing more than one finding at once. The
+other two gaps noted above — push/PR requested-but-absent, and a
+non-Python target — were closed by iteration 21, immediately below.
+
+## Iteration 21 — two more Remediate trials: PR requested but impossible, and a non-Python (Go) target
+
+Two more isolated trials, closing two of the three gaps iteration 20 left
+open.
+
+### Trial A — "直してPRにして" against a repo with no remote at all
+
+Same `cli-data-processor` O(n·m) finding as iteration 20, fresh disposable
+copy, but this time the simulated follow-up was "直してPRにして" (fix it
+*and* turn it into a PR) against a git repo deliberately left with no
+remote configured — simulating a session with local write access but no
+push destination whatsoever (not a missing credential; no destination to
+push to at all).
+
+The subagent correctly produced 6.2's upfront disclosure as its own message
+before touching any file, confirmed via `git remote -v` first: local write
+access yes, push/PR no, and why (no remote configured, not an auth
+problem). It then fixed the finding properly — this time via a
+precomputed `id -> label` dict (`O(m)` build + `O(1)` lookups, `O(n+m)`
+total) rather than iteration 20's `pd.merge`, a different but equally valid
+way to resolve the same finding — added a structural regression test
+(monkeypatching `pandas.Series.__eq__` to assert zero table-scan
+comparisons across 200 calls, catching a revert the same way iteration 20's
+call-counting spy did), and ran the full suite (3/3 passing).
+
+**The real gap found**: nothing left uncommitted was staged, but the
+subagent had to *improvise* whether "PRにして" implies permission to at
+least `git commit` locally once the PR itself was already known to be
+impossible — SKILL.md's step 6.4 says committing is a separate escalation
+from a plain fix, but didn't address whether that still holds when the
+person's actual request named a goal beyond commit that turned out to be
+unreachable. The subagent judged, reasonably, that a request for PR is not
+the same as a request for "commit as far as you can" and left the fix
+uncommitted — but flagged this as a judgment call the text doesn't make
+for them. Fixed directly in step 6.4: an unreachable requested end-state
+does not retroactively authorize a lesser action (like committing) that
+was never itself requested.
+
+### Trial B — a Go/concurrency finding (first non-Python target)
+
+A synthetic but realistic finding against `evals/fixtures/go-queue-worker`
+(reused from `evals.json` eval-2): an unsynchronized package-level
+`map[string]string` (`internal/cache/cache.go`) written from multiple
+worker goroutines with no mutex, on a disposable git-tracked copy. Follow-up:
+plain "直して".
+
+The subagent chose `sync.RWMutex` over `sync.Map` (better fit for a
+`map[string]string` with an existing typed API to preserve) or a
+channel-owned goroutine (a bigger structural change than the finding
+called for), left `internal/worker/worker.go`'s separate, unflagged
+"no timeout on downstream calls" comment untouched per 6.3's
+scope discipline, and — since the project had zero existing tests — wrote
+a new `cache_test.go` with 50 goroutines × 100 ops.
+
+**What this trial actually validated, and why it matters**: the subagent
+ran its new test with `go test -race` against the *original, unfixed* code
+first — confirming the race detector actually caught the real hazard
+(`WARNING: DATA RACE` at the exact flagged line, 5/5 runs) — before running
+it again against the fix (clean, 5/5 runs). This before/after A-B
+verification is exactly what iteration 20's structural-test principle
+("a test claiming to catch a bug must be shown to actually have the power
+to catch it") requires, but SKILL.md's step 6.3 had only ever stated that
+principle for the performance case, not generalized it. A race is
+non-deterministic — a bare pass/fail run proves nothing, since it can pass
+against genuinely buggy code by chance. Fixed directly in step 6.3: added
+explicit guidance for concurrency findings to use the ecosystem's race
+detector and verify the new test fails on the unfixed code before trusting
+it against the fix, framed as the same underlying principle as the
+performance case applied to a different failure mode, with an explicit
+instruction to apply that same principle by judgment for any bug class
+this doesn't name outright.
+
+**Conclusion (iteration 21)**: both trials' fixes were independently
+verified correct (A: complexity provably reduced via a structural
+assertion; B: race provably eliminated via a before/after `-race` A-B
+check) and both left the working tree in the exact state 6.4 requires
+(nothing staged, nothing committed, nothing pushed). Both trials found a
+real SKILL.md wording gap under load-bearing conditions the previous
+trial hadn't exercised, and both were fixed directly from that evidence
+rather than spawning a hypothetical future TODO — consistent with this
+project's standard that a step counts as validated only once a real trial
+exists for the case in question, not merely once its documentation reads
+plausibly.
+
+**Not yet validated**: a trial fixing more than one finding in the same
+turn (does step 6.1's "default to every CONFIRMED finding" behavior
+actually fix all of them, or does an agent tend to stop after the first).
 
 ## Iteration 18 — self-hosted plugin marketplace, closing the actual gap the version-bookkeeping addition (iteration 16-17-adjacent) didn't
 
