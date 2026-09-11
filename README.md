@@ -82,7 +82,11 @@ it shows which domains have real accumulated debt a diff-only pass wouldn't
 touch, then lets the person choose between diff-only and full. Diff-scoped
 runs are tracked separately in `receipts.py`'s debt calculation
 (`diff_checks_since_last_full`) so they're visible without being mistaken
-for actually re-verifying the whole domain.
+for actually re-verifying the whole domain. Before any of this, step 0.4
+runs `git fetch` (never `git pull` — this skill never writes to the audited
+project's tracked files) and warns plainly, asking before proceeding, if the
+local checkout is behind its remote — auditing (or diff-sizing against)
+stale code silently is worse than admitting the checkout isn't current.
 
 See `research/adaptive-audit-competitive-research.md` for the full competitive
 analysis, feature matrix, and naming investigation behind these decisions.

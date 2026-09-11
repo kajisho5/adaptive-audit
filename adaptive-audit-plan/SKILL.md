@@ -54,11 +54,53 @@ If this returns `"total_runs": 0` (or the command errors because no history
 exists yet), say so plainly in the output and proceed — this is expected on a
 project's first run, not a failure.
 
+### 0.4. Make sure the local checkout is actually current
+
+Every downstream step — signal inspection, domain scoring, and especially
+step 0.5's diff sizing just below — assumes the local working tree reflects
+the code that actually matters right now. A local clone that's behind its
+remote quietly breaks that assumption: the plan gets built against stale
+code, and step 0.5's diff-mode decision could look at the wrong (too small,
+or entirely wrong) set of changes without anyone noticing. Run this before
+step 0.5, not after — there's no point sizing a diff against a HEAD that
+might not be current yet.
+
+If this is a git repository with a configured remote, run `git fetch` (not
+`git pull`) and compare local `HEAD` against the corresponding remote-
+tracking branch. `git fetch` never touches the working tree or any tracked
+file, so it doesn't conflict with this skill never writing to the audited
+project's own files. `git pull` would touch the working tree, so never run
+it automatically here, even to "help."
+
+**In dry-run mode, skip the `git fetch` call itself** — it does write inside
+the project's own `.git/` directory (updated remote-tracking refs,
+`FETCH_HEAD`), which is a real side effect even though it never touches a
+tracked file, and dry-run mode's promise is no side effects on the target
+repo at all. Instead, compare local `HEAD` against whatever remote-tracking
+ref already happens to exist locally (which may itself be stale) and
+disclose plainly that freshness could not be actively verified this run
+because of the read-only constraint — the same honest tradeoff dry-run mode
+already makes everywhere else in this skill.
+
+- **Local HEAD matches or is ahead of the remote**: proceed normally, no
+  need to mention this in the output.
+- **Local HEAD is behind the remote**: say so plainly and prominently in the
+  output (see "Output format"), stating how many commits behind. Ask the
+  person whether to proceed against the current (stale) checkout anyway, or
+  pull first and re-run — don't silently pick either. Auditing stale code
+  and reporting it as if it were current is a worse failure mode than
+  simply admitting the checkout is behind.
+- **No remote configured, not a git repo, or the fetch fails** (offline,
+  no network access, private remote unreachable from this environment):
+  say so and proceed against the local checkout as-is — this is the same
+  honest-disclosure-over-silent-assumption handling as any other signal in
+  step 2 that can't be checked.
+
 ### 0.5. Check for a small-diff re-audit opportunity — and let the person decide, don't decide for them
 
 Skip this step entirely if step 0 found no history (`total_runs: 0`), if this
 project isn't a git repository, or if this run is already in dry-run mode.
-Otherwise:
+Otherwise (step 0.4 has already run by this point):
 
 1. From `list-results` (falling back to `list` if no execution results exist
    yet), find the most recent record whose `scope` is `"full"` or absent
@@ -284,7 +326,10 @@ language; keep the JSON block's keys as-is):
 ````
 # Audit Plan
 (if step 1 found a dry-run/read-only constraint, say so in one line right here,
- before any other section: this run will not be recorded, and why)
+ before any other section: this run will not be recorded, and why. If step 0.4
+ found the local checkout behind its remote, say that here too, just as
+ prominently — how many commits behind, and whether the person chose to
+ proceed against the stale checkout or pull first and re-run)
 
 ## 過去の監査履歴
 (what step 0 found: total prior runs, and any domain with notable accumulated

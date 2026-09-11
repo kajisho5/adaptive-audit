@@ -975,3 +975,29 @@ a diff-mode Hunt to blast radius rather than the whole project). That's the
 next real-world validation gap for this feature, the same way staged
 depth-escalation (iteration 10) wasn't validated on a real project until
 iteration 11.
+
+## Addendum to iteration 16 — freshness check (step 0.4), same conversation
+
+A follow-up question in the same conversation surfaced a real gap the diff
+feature had introduced without addressing it: step 0.5's diff sizing (and
+every other step's project inspection) silently assumes the local checkout
+is current. A local clone behind its remote breaks that assumption
+invisibly — the plan would be built against stale code, and step 0.5's diff
+size could be measured against the wrong commit entirely.
+
+Added `adaptive-audit-plan` step 0.4, ahead of step 0.5: `git fetch` (never
+`git pull` — this skill's read-only guarantee is about the target project's
+own files, and `git pull` would touch the working tree) to update
+remote-tracking refs, then compare local `HEAD` against them. If local HEAD
+is behind, say so prominently in the output and ask the person whether to
+proceed against the stale checkout or pull first and re-run, rather than
+silently doing either. In dry-run mode, even `git fetch` is skipped (it
+writes inside the target repo's own `.git/` directory — remote-tracking
+refs, `FETCH_HEAD` — which is a real side effect even though it never
+touches a tracked file), falling back to whatever remote-tracking state
+already exists locally and disclosing that freshness couldn't be actively
+verified this run.
+
+Documentation-only change (no `receipts.py` logic involved) — not yet
+validated against a real project either, same open gap as the rest of
+iteration 16.
