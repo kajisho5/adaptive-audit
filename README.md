@@ -19,7 +19,7 @@
 /plugin install adaptive-audit@adaptive-audit
 ```
 
-`adaptive-audit` is two [Claude Code Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills) — `adaptive-audit-plan` and `adaptive-audit-execute` — that turn "バグチェックして" / "check this for bugs" into a real, complete audit instead of a fixed checklist or a single generic pass. Given a plain request, the agent inspects the actual project (stack, architecture, risk signals, recent changes), scores all 11 audit domains against what it actually found — not just what the request happened to name — runs an isolated Hunt pass per selected domain, then a separate isolated Verify pass that independently checks every candidate before it's reported. One natural-language request, a real answer, no required follow-up question.
+`adaptive-audit` is two [Claude Code Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills) — `adaptive-audit-plan` and `adaptive-audit-execute` — that turn "check this for bugs" / "バグチェックして" into a real, complete audit instead of a fixed checklist or a single generic pass. Given a plain request, the agent inspects the actual project (stack, architecture, risk signals, recent changes), scores all 11 audit domains against what it actually found — not just what the request happened to name — runs an isolated Hunt pass per selected domain, then a separate isolated Verify pass that independently checks every candidate before it's reported. One natural-language request, a real answer, no required follow-up question.
 
 > **Audit-Debt Ledger.** Every plan and every execution is recorded outside the
 > project (`~/.adaptive-audit/`), so a domain that keeps getting skipped across
@@ -53,7 +53,7 @@ Most "review my code" tools run the same fixed checklist — usually security-on
 /plugin install adaptive-audit@adaptive-audit
 ```
 
-Then just talk to your agent, in whatever language you normally use — Japanese isn't required, it's just this project's own author's habitual phrasing throughout this README:
+Then just talk to your agent, in any language:
 
 > "check this for bugs" / "バグチェックして"
 
@@ -61,11 +61,11 @@ The agent inspects the project, scores all 11 domains, runs `adaptive-audit-plan
 
 Want the plan without running it? Ask for that instead:
 
-> "何を確認すべきか教えて、まだ実行しないで" / "what should we look at, don't actually check yet"
+> "what should we look at, don't actually check yet" / "何を確認すべきか教えて、まだ実行しないで"
 
 Found something you want fixed? Ask separately, after the findings exist:
 
-> "直して" / "fix the confirmed findings"
+> "fix the confirmed findings" / "直して"
 
 This runs the opt-in **Remediate** step (see [below](#remediate-opt-in)) — never assumed from a request's severity, always a second, explicit ask.
 
