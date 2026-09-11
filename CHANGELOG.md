@@ -21,7 +21,17 @@ field in sync with this one — `tests/test_versioning.py` enforces it.
 
 ## [Unreleased]
 
-Nothing yet.
+- `adaptive-audit-execute`: a new opt-in Remediate step (step 6), triggered
+  only by a separate, explicit follow-up request after an audit ("直して",
+  "直してPRにして") — never inferred from a finding's severity or an audit's
+  own `overall_status`. Fixes CONFIRMED findings minimally (one at a time,
+  scoped to each finding's own `failure_scenario`), adds/runs tests where a
+  test runner exists, and never commits or pushes without being asked to.
+  Checks and discloses up front whether this session can actually write to
+  the target project and, if a PR was asked for, whether it can push to or
+  open a PR against that remote — surfacing a missing push credential before
+  writing anything, not after. Does not write to `receipts.py`: a fix is not
+  the same claim as re-verifying a domain's audit debt.
 
 ## [0.1.0] — first tracked release
 

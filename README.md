@@ -16,7 +16,12 @@ vague first ask should not stop at a plan waiting for a second command.
   carries it out: an isolated Hunt pass per selected domain, then a separate
   isolated Verify pass that independently checks each candidate against the
   source before it's reported (CONFIRMED / PLAUSIBLE / REJECTED). Real
-  findings, not just a plan.
+  findings, not just a plan. A plain audit request never fixes anything on its
+  own — only a later, separate, explicit follow-up ("直して", "直してPRにして")
+  triggers the skill's opt-in Remediate step, which patches CONFIRMED findings
+  minimally, runs the project's own tests, and is explicit about what it did
+  and did not do (fix written vs. tested vs. committed vs. pushed vs. PR
+  opened) rather than assuming write or push access it doesn't have.
 - **`adaptive-audit-plan`** — the scoping half on its own, for when someone
   explicitly wants only that: "何を確認すべきか教えて(まだ実行しないで)",
   "計画だけ欲しい", or when they want to see/update the accumulated **audit

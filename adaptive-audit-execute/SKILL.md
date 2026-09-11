@@ -1,6 +1,6 @@
 ---
 name: adaptive-audit-execute
-description: THE DEFAULT SKILL for any "check/review/audit this code" request, including a first, vague, unqualified one like "バグチェックして", "check this for bugs", "review this before we ship", "make sure this is solid" — with no other signal, this is the skill to use, not adaptive-audit-plan alone. Produces a scoped plan first (by following adaptive-audit-plan's process — inspecting the actual project and deciding which domains/depths genuinely matter, exactly as adaptive-audit-plan would on its own) and then, in the same response, actually carries it out: an isolated Hunt pass per selected domain, then a separate isolated Verify pass that independently checks each candidate against the source before it's reported (CONFIRMED/PLAUSIBLE/REJECTED) — real findings, not just a plan. A natural-language request producing a real, complete audit end to end, with no required follow-up question, is the entire point of this project; use adaptive-audit-plan by itself only when the person explicitly wants scoping without execution ("何を確認すべきか教えて", "計画だけ欲しい", "まだ実行しないで", "先に方針を確認したい", "what should we look at, don't actually check yet") — that is the exception this skill is not for, not the other way around. Never audits the target project's own files — reads only, and any reproduction/PoC work happens outside the project directory — except the one explicit opt-in of saving the findings report itself into the project (step 4.5), triggered only by an explicit request, never assumed. Respects an explicit read-only/dry-run request (skips writing the execution result; the audit itself still runs and still reports real findings) rather than treating "don't touch anything" as a reason to decline the whole audit.
+description: THE DEFAULT SKILL for any "check/review/audit this code" request, including a first, vague, unqualified one like "バグチェックして", "check this for bugs", "review this before we ship", "make sure this is solid" — with no other signal, this is the skill to use, not adaptive-audit-plan alone. Produces a scoped plan first (by following adaptive-audit-plan's process — inspecting the actual project and deciding which domains/depths genuinely matter, exactly as adaptive-audit-plan would on its own) and then, in the same response, actually carries it out: an isolated Hunt pass per selected domain, then a separate isolated Verify pass that independently checks each candidate against the source before it's reported (CONFIRMED/PLAUSIBLE/REJECTED) — real findings, not just a plan. A natural-language request producing a real, complete audit end to end, with no required follow-up question, is the entire point of this project; use adaptive-audit-plan by itself only when the person explicitly wants scoping without execution ("何を確認すべきか教えて", "計画だけ欲しい", "まだ実行しないで", "先に方針を確認したい", "what should we look at, don't actually check yet") — that is the exception this skill is not for, not the other way around. Never audits the target project's own files — reads only, and any reproduction/PoC work happens outside the project directory — except two explicit opt-ins, neither ever assumed from tone, severity, or an audit's own overall_status: saving the findings report itself into the project (step 4.5), and actually writing fixes for findings from a *separate, later, explicit* follow-up request ("直して", "直してPRにして", "fix the confirmed findings", "open a PR for #2") — step 6, Remediate. A plain audit request never fixes anything on its own, no matter how severe the findings; use this skill's step 6 only once that follow-up request actually arrives. Respects an explicit read-only/dry-run request (skips writing the execution result; the audit itself still runs and still reports real findings) rather than treating "don't touch anything" as a reason to decline the whole audit.
 ---
 
 # Adaptive Audit — Plan Executor
@@ -349,6 +349,69 @@ said `"standard"` or `"deep"`. `receipts.py`'s debt calculation reads this field
 — getting this field right is what keeps a staged-escalation stop from being
 silently miscounted as full-depth verification.
 
+### 6. Remediate — opt-in, and only on a separate, later, explicit request
+
+Everything above (steps 0-5) produces findings, never fixes — that boundary holds
+no matter how severe `overall_status` came back. This step is the one deliberate
+exception, and it only exists once a **separate, explicit follow-up request**
+actually arrives asking to fix, patch, remediate, or open a PR for what was found
+("直して", "直してPRにして", "fix this", "patch the confirmed findings", "open a
+PR for #2 and #3"). Do not infer this from severity, urgency, or a FAIL status —
+a report full of high-severity CONFIRMED findings is still just a report until
+the person asks for it to be acted on. If that request arrives in the same
+message as the original audit request ("バグチェックして、直して"), still treat
+this as two logically separate steps in the same response — findings first, then
+remediation — never skip straight to writing fixes without the findings existing
+first as their own artifact.
+
+**6.1 Determine what to fix.** Default to every CONFIRMED finding from the most
+recent findings report in this conversation (or a saved report file, if the
+person points at one). Do not fix a PLAUSIBLE finding by default — its actual
+impact was never established, so ask which ones (if any) the person wants
+included, listing them, rather than silently including or silently dropping
+them. Never touch a REJECTED finding. If the person names specific findings
+("#2と#3を直して"), fix only those, regardless of what else is CONFIRMED.
+
+**6.2 Check what this session can actually do before promising anything.** Before
+writing a single line, work out whether this session can write to the target
+project's files at all, and — only if a PR/push was actually requested — whether
+it can push to or open a PR against that specific remote (this can differ
+sharply from local write access: a session can freely edit a local checkout of
+a project it has no push credentials for at all). State this plainly, up front,
+before doing any work: what this step can and cannot do for the destination the
+person actually asked for. This is not a formality — discovering a missing push
+credential *after* fixes are already written, and only then improvising a
+workaround (spawning other sessions, asking the person to manually fork from a
+phone, etc.), turns a small fix into a long, confusing, multi-step ordeal for
+everyone involved. Surface the constraint before starting, not after.
+
+**6.3 Fix minimally, one finding at a time.** For each finding being fixed, write
+the smallest change that addresses exactly its `failure_scenario` — no
+drive-by refactors, no unrelated cleanup, no fixing things the audit didn't
+actually flag. If the project has a test suite, add or extend a test that would
+have caught this specific bug, then run the project's *existing* test suite (not
+only the new test) to confirm nothing else broke. A finding whose fix can't be
+validated this way (no test runner available, the fix is config/infra rather
+than code) should say so plainly rather than silently skip verification.
+
+**6.4 Never commit or push without being asked to, and never overclaim what
+happened.** Writing the fix to the working tree is what a plain "直して"
+asked for — nothing more. Staging, committing, pushing, and opening a PR are
+each their own further escalation, layered the same way step 4.5 already
+separates writing a report file from committing it; a request for one does not
+imply the next. In every response from this step, state exactly which of
+{fix written, test added/run, committed, pushed, PR opened} actually happened,
+and which of those the person still needs to do themselves or which this
+session genuinely cannot do (e.g. no push access to that remote) — never leave
+that ambiguous.
+
+**6.5 This step never touches `receipts.py`.** Fixing a finding is not the same
+claim as re-verifying its domain, and recording one here would corrupt the
+audit-debt calculation, which measures coverage, not fix status. If the person
+wants a domain to count as freshly re-verified after the fix, that requires an
+actual new `adaptive-audit-execute` run against the now-fixed code — this step
+has no shortcut for that, and shouldn't invent one.
+
 ## Output format
 
 ALWAYS use this exact structure (translate headings to the request's language;
@@ -371,6 +434,15 @@ keep the JSON keys as-is):
 
 ## <domain 2> の結果
 ...
+
+## Remediate結果
+(only include this section when step 6 actually ran this turn — omit entirely,
+ don't say "N/A", on a plain audit-only turn. Per finding fixed: which finding,
+ what changed and why it's minimal, whether a test was added/run and its
+ result. Then state plainly, per 6.4, exactly which of {fix written, test
+ added/run, committed, pushed, PR opened} happened versus what's left to the
+ person or genuinely out of this session's reach — this is the one part of
+ this section that must never be vague.)
 
 ## result_record (JSON)
 ```json
