@@ -19,7 +19,7 @@
 /plugin install adaptive-audit@adaptive-audit
 ```
 
-`adaptive-audit` is two [Claude Code Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills) — `adaptive-audit-plan` and `adaptive-audit-execute` — that turn "バグチェックして" / "check this for bugs" into a real, complete audit instead of a fixed checklist or a single generic pass. Given a plain request, the agent inspects the actual project (stack, architecture, risk signals, recent changes), scores all 11 audit domains against what it actually found — not just what the request happened to name — runs an isolated Hunt pass per selected domain, then a separate isolated Verify pass that independently checks every candidate before it's reported. One natural-language request, a real answer, no required follow-up question.
+`adaptive-audit` is two [Claude Code Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills) — `adaptive-audit-plan` and `adaptive-audit-execute` — that turn "check this for bugs" / "バグチェックして" into a real, complete audit instead of a fixed checklist or a single generic pass. Given a plain request, the agent inspects the actual project (stack, architecture, risk signals, recent changes), scores all 11 audit domains against what it actually found — not just what the request happened to name — runs an isolated Hunt pass per selected domain, then a separate isolated Verify pass that independently checks every candidate before it's reported. One natural-language request, a real answer, no required follow-up question.
 
 > **Audit-Debt Ledger.** Every plan and every execution is recorded outside the
 > project (`~/.adaptive-audit/`), so a domain that keeps getting skipped across
