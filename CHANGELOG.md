@@ -21,13 +21,11 @@ field in sync with this one — `tests/test_versioning.py` enforces it.
 
 ## [Unreleased]
 
-- README rewritten end to end in the structure/style of `kajisho5/ffmpeg-skill`'s
-  README (badges, a one-line tagline, a mermaid architecture diagram, a
-  domain-taxonomy table, a "Validated so far" results table, an inline TOC) —
-  no content dropped, only restructured: every existing caveat (Cost, the
-  honest competitive comparison, the Remediate/invariant-extraction opt-in
-  disclosures) carries over, condensed into scannable tables where the prose
-  form was previously the only option.
+Nothing yet.
+
+## [0.1.2] - 2026-09-11
+
+- Rewrite README in the structure/style of kajisho5/ffmpeg-skill's README (#14)
 
 ## [0.1.1] - 2026-09-11
 
