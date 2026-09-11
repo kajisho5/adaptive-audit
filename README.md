@@ -19,13 +19,12 @@
 /plugin install adaptive-audit@adaptive-audit
 ```
 
-`adaptive-audit` is two [Claude Code Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills) — `adaptive-audit-plan` and `adaptive-audit-execute` — that turn "check this for bugs" / "バグチェックして" into a real, complete audit instead of a fixed checklist or a single generic pass. Given a plain request, the agent inspects the actual project (stack, architecture, risk signals, recent changes), scores all 11 audit domains against what it actually found — not just what the request happened to name — runs an isolated Hunt pass per selected domain, then a separate isolated Verify pass that independently checks every candidate before it's reported. One natural-language request, a real answer, no required follow-up question.
+`adaptive-audit` is two [Claude Code Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills) — `adaptive-audit-plan` and `adaptive-audit-execute` — that turn "check this for bugs" into a real, complete audit instead of a fixed checklist or a single generic pass. Given a plain request, the agent inspects the actual project (stack, architecture, risk signals, recent changes), scores all 11 audit domains against what it actually found — not just what the request happened to name — runs an isolated Hunt pass per selected domain, then a separate isolated Verify pass that independently checks every candidate before it's reported. One natural-language request, a real answer, no required follow-up question.
 
 > **Audit-Debt Ledger.** Every plan and every execution is recorded outside the
 > project (`~/.adaptive-audit/`), so a domain that keeps getting skipped across
-> differently-framed requests — this week "look at security" ("セキュリティ見て"),
-> next month "look at performance" ("パフォーマンス見て") — shows up as
-> accumulating debt even when the current
+> differently-framed requests — this week "look at security", next month
+> "look at performance" — shows up as accumulating debt even when the current
 > request never mentions it. Coverage tracked across audit *types*, not just
 > repeated runs of the same one. → [full explanation](#the-audit-debt-ledger)
 
@@ -55,17 +54,17 @@ Most "review my code" tools run the same fixed checklist — usually security-on
 
 Then just talk to your agent, in any language:
 
-> "check this for bugs" / "バグチェックして"
+> "check this for bugs"
 
 The agent inspects the project, scores all 11 domains, runs `adaptive-audit-plan`'s self-critique, then `adaptive-audit-execute`'s isolated Hunt → Verify per selected domain — and reports back CONFIRMED / PLAUSIBLE findings with file:line evidence, in one response, translated into whatever language you asked in. No slash command needed; asking for it in plain language is the whole interface.
 
 Want the plan without running it? Ask for that instead:
 
-> "what should we look at, don't actually check yet" / "何を確認すべきか教えて、まだ実行しないで"
+> "what should we look at, don't actually check yet"
 
 Found something you want fixed? Ask separately, after the findings exist:
 
-> "fix the confirmed findings" / "直して"
+> "fix the confirmed findings"
 
 This runs the opt-in **Remediate** step (see [below](#remediate-opt-in)) — never assumed from a request's severity, always a second, explicit ask.
 
@@ -124,7 +123,7 @@ Modeled on the `Artifact`/`ProductionReceipt` pattern from [`kajisho5/AI-video-p
 
 ## Remediate (opt-in)
 
-A plain audit request never fixes anything — no matter how severe the findings. Only a **separate, explicit follow-up** ("fix this" / "直して", "fix this and open a PR" / "直してPRにして") triggers `adaptive-audit-execute` step 6:
+A plain audit request never fixes anything — no matter how severe the findings. Only a **separate, explicit follow-up** ("fix this", "fix this and open a PR") triggers `adaptive-audit-execute` step 6:
 
 - Defaults to every CONFIRMED finding when none are named; a PLAUSIBLE finding is never fixed without being asked about first.
 - Checks, and states plainly *before* touching any file, whether this session can actually write to the project and — only if a PR/push was requested — whether it can push to or open a PR against that destination. A requested end-state already known to be impossible (no remote configured, no push credential) never retroactively authorizes a lesser, unrequested action like committing locally.
@@ -173,7 +172,7 @@ Later, to pull in whatever's newest on `main`:
 ```
 /plugin marketplace update adaptive-audit
 ```
-This is a personal/third-party marketplace, not an official Anthropic one, so Claude Code's background auto-update is off by default for it — the command above is the manual pull, or enable it per-marketplace via `/plugin` → Marketplaces → `adaptive-audit` → Enable auto-update. Skill auto-invocation ("check this for bugs" / "バグチェックして", no slash command) works identically either way.
+This is a personal/third-party marketplace, not an official Anthropic one, so Claude Code's background auto-update is off by default for it — the command above is the manual pull, or enable it per-marketplace via `/plugin` → Marketplaces → `adaptive-audit` → Enable auto-update. Skill auto-invocation ("check this for bugs", no slash command) works identically either way.
 
 **Plain copy** (no update mechanism — re-copy by hand for the latest): copy `adaptive-audit-plan/` and `adaptive-audit-execute/` into `.claude/skills/`.
 
@@ -187,7 +186,7 @@ This is a personal/third-party marketplace, not an official Anthropic one, so Cl
 | C/C++ network-facing library | ~20,600 lines | 7 | ~1.53M |
 | TypeScript/Node web app | ~10,900 lines | 6 | ~1.05M |
 
-(Project names withheld deliberately — see `evals/validation-notes.md`.) A Quick-only pass or a plan-only request costs a small fraction of this — depth drives cost, not project size alone. Say so explicitly ("take a quick look" / "さっと見て", "give it a light check" / "軽くチェックして") if cost matters more than thoroughness for a given ask; the plan step reads that as a depth signal.
+(Project names withheld deliberately — see `evals/validation-notes.md`.) A Quick-only pass or a plan-only request costs a small fraction of this — depth drives cost, not project size alone. Say so explicitly ("take a quick look", "give it a light check") if cost matters more than thoroughness for a given ask; the plan step reads that as a depth signal.
 
 ## Development
 
