@@ -21,13 +21,11 @@ field in sync with this one — `tests/test_versioning.py` enforces it.
 
 ## [Unreleased]
 
-- Invariant extraction: opened a public beta call ([issue #12](https://github.com/kajisho5/adaptive-audit/issues/12))
-  asking for third-party trial reports — every trial so far (four) was run
-  by this project's own author using this project's own verification
-  methodology, which isn't independent evidence. Also fixed a stale "two
-  trials" reference in `invariant-extraction.md` and `README.md` left over
-  from before trials 3-4 were merged; both now say four and link the beta
-  call.
+Nothing yet.
+
+## [0.1.1] - 2026-09-11
+
+- Open a public beta call for third-party invariant-extraction trials (#13)
 
 ## [0.1.0] - 2026-09-11
 
