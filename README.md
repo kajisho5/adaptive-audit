@@ -21,7 +21,13 @@ vague first ask should not stop at a plan waiting for a second command.
   triggers the skill's opt-in Remediate step, which patches CONFIRMED findings
   minimally, runs the project's own tests, and is explicit about what it did
   and did not do (fix written vs. tested vs. committed vs. pushed vs. PR
-  opened) rather than assuming write or push access it doesn't have.
+  opened) rather than assuming write or push access it doesn't have. **This
+  step itself is not a differentiator** — Anthropic's own `/security-review`
+  and Snyk's official Claude Skill already do scan-then-fix (the latter with
+  an explicit optional PR step); what Remediate adds on top is only that it
+  stays deliberately inert until asked, and never touches `receipts.py`'s
+  audit-debt tracking (fixing a finding isn't the same claim as re-verifying
+  its domain — see that skill's own step 6.5).
 - **`adaptive-audit-plan`** — the scoping half on its own, for when someone
   explicitly wants only that: "何を確認すべきか教えて(まだ実行しないで)",
   "計画だけ欲しい", or when they want to see/update the accumulated **audit
@@ -107,6 +113,31 @@ after the underlying issue is fixed.
 
 See `research/adaptive-audit-competitive-research.md` for the full competitive
 analysis, feature matrix, and naming investigation behind these decisions.
+
+## How this compares to existing tools
+
+Stated plainly, not just linked, since it's easy to miss inside a large
+research doc: **if your need is security-only, an existing tool likely
+already covers most of this pipeline, and this repo doesn't claim otherwise.**
+
+- [`cloudflare/security-audit-skill`](https://github.com/cloudflare/security-audit-skill)
+  and [`dinosn/raptor-loop-hunt`](https://github.com/dinosn/raptor-loop-hunt)
+  both implement the Hunt → adversarial Verify → independent-check pattern
+  this repo also uses, for security specifically, with real-world track
+  records this repo doesn't have (raptor-loop-hunt reports 200+ verified
+  findings across 40+ real codebases; this repo's own validation is 3
+  redacted real-project runs, see "Cost" below). If security is the whole
+  need, either is a reasonable choice on its own.
+- What this repo adds on top, as far as a competitive search could confirm
+  (see the research doc for the full method and caveats — absence of a
+  match in that search is reported as "not found," never as "doesn't
+  exist"): **treating "what to audit" as domain-agnostic rather than
+  security-specific**, and **tracking audit debt across audit *types*, not
+  just repeated runs of the same one** (`scripts/receipts.py` — a domain
+  like `performance` or `data-integrity` that keeps getting skipped shows up
+  as debt the same way a stale security pass would).
+- The opt-in Remediate step (`adaptive-audit-execute` step 6) is explicitly
+  **not** part of that differentiation — see its own description above.
 
 ## What's here
 

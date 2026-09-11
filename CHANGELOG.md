@@ -21,6 +21,19 @@ field in sync with this one — `tests/test_versioning.py` enforces it.
 
 ## [Unreleased]
 
+- Added `LICENSE` (MIT) and `CONTRIBUTING.md` — both were missing, which
+  blocked this repo from actually being usable as OSS despite the plugin
+  marketplace distribution path already documented in this README.
+- README: added a "How this compares to existing tools" section stating
+  plainly, not just via a linked research doc, that a security-only need is
+  already well covered by `cloudflare/security-audit-skill` or
+  `dinosn/raptor-loop-hunt`, and that the Remediate step is not part of this
+  project's differentiation (it overlaps with Anthropic's own
+  `/security-review` and Snyk's official Claude Skill).
+- `scripts/receipts.py` (both copies): documented that `_debt_status`'s
+  STALE/AGING thresholds (3/2 runs) are a disclosed, uncalibrated heuristic,
+  not a measured constant — a prior gap where the reasoning existed only in
+  a reviewer's head, not in the code.
 - `adaptive-audit-execute`: a new opt-in Remediate step (step 6), triggered
   only by a separate, explicit follow-up request after an audit ("直して",
   "直してPRにして") — never inferred from a finding's severity or an audit's

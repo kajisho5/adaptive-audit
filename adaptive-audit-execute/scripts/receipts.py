@@ -271,6 +271,17 @@ def _debt_status(entry: dict) -> str:
     # a human's attention at a glance. Verified (executed) state always wins
     # over planned-only state: a domain nobody has ever actually looked at is
     # worse than one that's merely due for another look.
+    #
+    # The "3" (STALE) and "2" (AGING) thresholds below are a chosen heuristic,
+    # not something calibrated against real audit-cadence data -- there is no
+    # empirical study behind these exact numbers. The reasoning is only:
+    # skipping a domain's Deep verification twice in a row (AGING) is worth
+    # flagging before it becomes three-in-a-row (STALE), i.e. "about to be
+    # forgotten entirely" rather than "just due again". If your own audit
+    # cadence makes these numbers a bad fit (e.g. you run this weekly and
+    # three runs is a few days, or monthly and three runs is a quarter),
+    # treat them as a starting point to change here, not a fixed constant to
+    # design around.
     if entry["times_executed"] == 0:
         if entry["times_selected"] == 0:
             return "UNAUDITED" if entry["times_appeared"] > 0 else "UNKNOWN"
