@@ -23,6 +23,10 @@ field in sync with this one — `tests/test_versioning.py` enforces it.
 
 Nothing yet.
 
+## [0.1.5] - 2026-09-11
+
+- Fix remaining Japanese-first orderings and simplify the language note (#17)
+
 ## [0.1.4] - 2026-09-11
 
 - Pair the remaining Japanese-only README examples with English (#16)
