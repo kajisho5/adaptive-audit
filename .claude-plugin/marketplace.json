@@ -8,7 +8,7 @@
       "name": "adaptive-audit",
       "source": "./",
       "description": "Domain-agnostic adaptive code audit: plan generation (adaptive-audit-plan) plus Hunt -> Verify execution with cross-run audit-debt tracking (adaptive-audit-execute).",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "skills": [
         "./adaptive-audit-plan",
         "./adaptive-audit-execute"

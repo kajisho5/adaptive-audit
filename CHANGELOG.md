@@ -23,6 +23,10 @@ field in sync with this one — `tests/test_versioning.py` enforces it.
 
 Nothing yet.
 
+## [0.1.4] - 2026-09-11
+
+- Pair the remaining Japanese-only README examples with English (#16)
+
 ## [0.1.3] - 2026-09-11
 
 - Clarify README language, add brand assets and embed logo (#15)
