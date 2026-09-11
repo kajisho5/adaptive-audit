@@ -1,194 +1,169 @@
-# adaptive-audit
+<h1 align="center">adaptive-audit</h1>
 
-Two Claude Code Skills, meant to be installed together. **`adaptive-audit-execute`
-is the default for a plain request like "バグチェックして" or "check this for
-bugs"** — a single natural-language request producing a real, complete audit
-with no required follow-up question is the founding goal of this project, so a
-vague first ask should not stop at a plan waiting for a second command.
+<p align="center"><strong>Give your coding agent a real audit process, not a checklist.</strong></p>
 
-- **`adaptive-audit-execute`** — given that kind of request, first generates a
-  scoped, risk-aware **Audit Plan** (by running `adaptive-audit-plan`'s own
-  process: inspecting the actual project and deciding which audit domains
-  genuinely matter here — security, correctness, performance, reliability,
-  architecture, data-integrity, concurrency, dependency-health,
-  configuration/deployment, test-coverage, observability — at what depth, and
-  which were *not* selected and why), then in the same response actually
-  carries it out: an isolated Hunt pass per selected domain, then a separate
-  isolated Verify pass that independently checks each candidate against the
-  source before it's reported (CONFIRMED / PLAUSIBLE / REJECTED). Real
-  findings, not just a plan. A plain audit request never fixes anything on its
-  own — only a later, separate, explicit follow-up ("直して", "直してPRにして")
-  triggers the skill's opt-in Remediate step, which patches CONFIRMED findings
-  minimally, runs the project's own tests, and is explicit about what it did
-  and did not do (fix written vs. tested vs. committed vs. pushed vs. PR
-  opened) rather than assuming write or push access it doesn't have. **This
-  step itself is not a differentiator** — Anthropic's own `/security-review`
-  and Snyk's official Claude Skill already do scan-then-fix (the latter with
-  an explicit optional PR step); what Remediate adds on top is only that it
-  stays deliberately inert until asked, and never touches `receipts.py`'s
-  audit-debt tracking (fixing a finding isn't the same claim as re-verifying
-  its domain — see that skill's own step 6.5).
-- **`adaptive-audit-plan`** — the scoping half on its own, for when someone
-  explicitly wants only that: "何を確認すべきか教えて(まだ実行しないで)",
-  "計画だけ欲しい", or when they want to see/update the accumulated **audit
-  debt** picture directly (`scripts/receipts.py report` renders it as a
-  human-readable table, `export-csv` as CSV for Excel/Sheets — ask Claude to
-  render a PDF from either when you need one to actually hand to someone,
-  rather than that being a built-in, dependency-adding feature of the script
-  itself). It also remembers, per project, which domains keep getting skipped
-  across differently-framed requests over time, and surfaces that accumulated
-  debt even when the current request doesn't mention it. Before finalizing,
-  an isolated critic subagent argues against the plan itself — mismatched
-  depth, an exclusion whose stated reason doesn't hold up, a signal that maps
-  to no domain — closing a gap nothing else in the competitive research does:
-  verifying the *plan*, not only the findings. `adaptive-audit-execute` runs
-  this exact process as its own first step when it needs a plan.
+<p align="center">
+  Domain-agnostic scoping · Isolated Hunt → Verify · Cross-run Audit-Debt tracking<br>
+  Claude Code Skills
+</p>
 
-This is a narrower MVP of a larger "Adaptive Audit Engine" concept. Before
-building the full pipeline, a competitive investigation found that most of the
-individual pieces already exist in well-established OSS (notably
-`cloudflare/security-audit-skill` and `dinosn/raptor-loop-hunt`, both
-security/vulnerability-domain-locked), so this repo only implements the
-confirmed white-space pieces, all now MVP-validated (see
-`evals/validation-notes.md`):
+<p align="center">
+  <a href="https://github.com/kajisho5/adaptive-audit/actions/workflows/test.yml"><img src="https://github.com/kajisho5/adaptive-audit/actions/workflows/test.yml/badge.svg" alt="tests"></a>
+  <a href="https://github.com/kajisho5/adaptive-audit/actions/workflows/codeql.yml"><img src="https://github.com/kajisho5/adaptive-audit/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
+  <img src="https://img.shields.io/badge/status-beta-yellow" alt="beta">
+</p>
 
-1. **Domain-agnostic adaptive audit-plan generation** (`adaptive-audit-plan/SKILL.md`)
-2. **Cross-audit-type persistent coverage/audit-debt tracking**
-   (`adaptive-audit-plan/scripts/receipts.py`) — modeled on the
-   `Artifact`/`ProductionReceipt` pattern from
-   `kajisho5/AI-video-production-OS`'s `docs/SPEC.md`: one content-addressed
-   record per completed run, kept outside the audited project. Debt is
-   computed from what was actually *executed and verified*
-   (`adaptive-audit-execute`'s results), not merely planned.
-3. **Domain-agnostic Hunt → Verify execution** (`adaptive-audit-execute/SKILL.md`)
-   — the general adversarial-review pattern proven by the security-specific
-   tools above, re-implemented (not vendored) so it isn't locked to one domain.
-   Validated under true cross-agent isolation (not a same-session fallback) on
-   a fixture whose bugs aren't announced in comments — see
-   `evals/validation-notes.md` iteration 4.
-4. **Audit-plan self-verification** (`adaptive-audit-plan/SKILL.md` step 5) —
-   an isolated critic reviews the plan itself before it ships. Confirmed
-   nothing in the 22+ surveyed competitors does this; existing tools verify
-   findings, not the plan that decided what to look for.
+```
+/plugin marketplace add kajisho5/adaptive-audit
+/plugin install adaptive-audit@adaptive-audit
+```
 
-A fifth idea — extracting a project's implied invariants ("a task's owner must
-match the caller") and checking code against them directly, rather than only
-scanning by domain — has now been validated across four trials (a synthetic
-fixture, two runs on a real ~10,895-line SaaS project, and one on a
-~20,571-line C codebase), including repeatedly rediscovering a project's most
-severe confirmed findings via a completely different reasoning path, and
-twice finding real issues the domain-based pipeline had missed
-(`adaptive-audit-execute/references/invariant-extraction.md`). It's still
-**opt-in, not part of the default pipeline** — this was the highest-risk,
-least-proven idea in the original research, and every trial so far was run
-by this project's own author using this project's own verification
-methodology, which isn't independent evidence. **Public beta**: if you try
-it on your own project, reporting the result (positive or negative) at
-[issue #12](https://github.com/kajisho5/adaptive-audit/issues/12) is exactly
-the kind of evidence this needs before it could reasonably move past opt-in.
+`adaptive-audit` is two [Claude Code Skills](https://docs.anthropic.com/en/docs/agents-and-tools/agent-skills) — `adaptive-audit-plan` and `adaptive-audit-execute` — that turn "バグチェックして" / "check this for bugs" into a real, complete audit instead of a fixed checklist or a single generic pass. Given a plain request, the agent inspects the actual project (stack, architecture, risk signals, recent changes), scores all 11 audit domains against what it actually found — not just what the request happened to name — runs an isolated Hunt pass per selected domain, then a separate isolated Verify pass that independently checks every candidate before it's reported. One natural-language request, a real answer, no required follow-up question.
 
-For a project that's already been fully audited once and only changed a
-little since, `adaptive-audit-plan` (step 0.5) can offer a cheaper **diff-only
-re-audit**, scoped to what actually changed (plus its direct blast radius)
-instead of the whole project — but only when the change is clearly small
-(≤15% of tracked files and ≤20 files), and it **asks rather than decides**:
-it shows which domains have real accumulated debt a diff-only pass wouldn't
-touch, then lets the person choose between diff-only and full. Diff-scoped
-runs are tracked separately in `receipts.py`'s debt calculation
-(`diff_checks_since_last_full`) so they're visible without being mistaken
-for actually re-verifying the whole domain. Before any of this, step 0.4
-runs `git fetch` (never `git pull` — this skill never writes to the audited
-project's tracked files) and warns plainly, asking before proceeding, if the
-local checkout is behind its remote — auditing (or diff-sizing against)
-stale code silently is worse than admitting the checkout isn't current.
+> **Audit-Debt Ledger.** Every plan and every execution is recorded outside the
+> project (`~/.adaptive-audit/`), so a domain that keeps getting skipped across
+> differently-framed requests — this week "セキュリティ見て", next month
+> "パフォーマンス見て" — shows up as accumulating debt even when the current
+> request never mentions it. Coverage tracked across audit *types*, not just
+> repeated runs of the same one. → [full explanation](#the-audit-debt-ledger)
 
-`adaptive-audit-execute` otherwise never writes to the audited project, with
-one explicit opt-in: if the request explicitly asks for the findings report
-to be saved into the project itself, it writes the same report to a file
-under `docs/audit-reports/` (never `git add`/`git commit`s it — that stays
-the person's own decision) — but only when explicitly asked, never inferred
-from anything about the project (this skill has no reliable way to verify
-who owns a repo, so ownership is never the trigger). If the report being
-saved contains an unpatched security finding, it says so plainly in the
-chat response before the person decides whether to commit: committing it
-makes that detail part of the repository's git history permanently, even
-after the underlying issue is fixed.
+---
 
-See `research/adaptive-audit-competitive-research.md` for the full competitive
-analysis, feature matrix, and naming investigation behind these decisions.
+**Contents**
+[Why](#why) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Design principles](#design-principles) · [Audit domains](#audit-domains) · [The Audit-Debt Ledger](#the-audit-debt-ledger) · [Remediate](#remediate-opt-in) · [Invariant Extraction](#invariant-extraction-opt-in-public-beta) · [How this compares](#how-this-compares-to-existing-tools) · [Validated so far](#validated-so-far) · [Install](#install) · [Cost](#cost) · [Development](#development) · [Docs](#docs)
+
+---
+
+## Why
+
+Most "review my code" tools run the same fixed checklist — usually security-only, or a generic style/lint pass — no matter what the project actually is or what the person actually asked. That wastes effort on domains that don't matter here and silently skips ones that do, with no record of the decision ever having been made:
+
+- **The request is a hint, not a ceiling.** "バグチェックして" on a payment webhook handler gets `security` and `data-integrity` scored and selected even though neither was named — a blast-radius floor for auth/payment/PII signals, not just keyword matching (`adaptive-audit-plan/SKILL.md` step 3).
+- **Scope decisions are never silent.** Every excluded domain gets a stated reason in the plan; a domain that scored high on project signals but wasn't selected says so explicitly, not just via omission.
+- **The plan gets attacked before it ships.** An isolated critic subagent argues against the plan itself — a mismatched depth, an exclusion that doesn't hold up, a signal that maps to no domain — before any Hunt pass runs.
+- **A hunter that expects to find things will find things.** Hunt and Verify run as separate, isolated subagents; Verify sees only the candidate's claim and the source, never the hunter's confidence or reasoning.
+- **Debt doesn't reset when the request changes framing.** A domain skipped five times in a row because every request happened to be framed around something else is exactly the gap this project tracks.
+
+## Quick start
+
+```
+/plugin marketplace add kajisho5/adaptive-audit
+/plugin install adaptive-audit@adaptive-audit
+```
+
+Then just talk to your agent:
+
+> "バグチェックして" / "check this for bugs"
+
+The agent inspects the project, scores all 11 domains, runs `adaptive-audit-plan`'s self-critique, then `adaptive-audit-execute`'s isolated Hunt → Verify per selected domain — and reports back CONFIRMED / PLAUSIBLE findings with file:line evidence, in one response. No slash command needed; asking for it in plain language is the whole interface.
+
+Want the plan without running it? Ask for that instead:
+
+> "何を確認すべきか教えて、まだ実行しないで" / "what should we look at, don't actually check yet"
+
+Found something you want fixed? Ask separately, after the findings exist:
+
+> "直して" / "fix the confirmed findings"
+
+This runs the opt-in **Remediate** step (see [below](#remediate-opt-in)) — never assumed from a request's severity, always a second, explicit ask.
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["Natural-language request"] --> B["adaptive-audit-plan\ninspect project, read prior Audit-Debt"]
+    B --> C["Score all 11 domains\nrequest signal + project signal + blast radius + debt"]
+    C --> D["Isolated critic subagent\nattacks the plan before it ships"]
+    D --> E["adaptive-audit-execute\nHunt: isolated subagent per selected domain"]
+    E --> F["Verify: isolated subagent per candidate\nCONFIRMED / PLAUSIBLE / REJECTED"]
+    F --> G["Audit Result\n+ Audit-Debt Ledger updated"]
+    G -.->|"separate, explicit\nfollow-up only"| H["Remediate (opt-in)\nminimal fix, tests run,\ncommit/push never assumed"]
+```
+
+## Design principles
+
+1. **The request is a starting signal, not the whole picture.** The project's own code — auth code, payment code, a migrations folder — is often a better guide to what needs checking than the words someone used to ask for it.
+2. **Never audit without scoping first, even under time pressure.** `adaptive-audit-execute` always runs `adaptive-audit-plan`'s process before Hunt/Verify — skipping the plan and going straight to findings is the two-step, generic-checklist failure mode this project exists to avoid.
+3. **Isolation is what makes Verify mean anything.** A Verify subagent that saw the Hunter's reasoning would anchor on confirming it. When true subagent isolation isn't available in a given environment, the skill says so plainly in its output rather than silently reporting a same-session fallback as if it were isolated.
+4. **Never write to the audited project, with exactly two disclosed, opt-in exceptions.** Saving the findings report into the project (only on explicit request), and Remediate's fixes (only on a separate, explicit follow-up). Neither is ever inferred from severity, urgency, or who looks like they own the repo.
+5. **Count what actually happened, not what was planned.** A domain that was supposed to run Deep but only completed a Quick-equivalent pass before running out of budget is recorded as executed-at-Quick — the Audit-Debt Ledger is only meaningful if it reflects real work, not attempted work.
+6. **Depth is per-domain, not uniform.** A project can warrant Deep on `security` and Quick on `performance` in the same run; a `depth_confidence: provisional` domain (a generic-baseline call, not a specific signal) gets a cheaper staged Quick-then-escalate treatment instead of a full Standard/Deep pass by default.
+7. **Fixing is never assumed from finding.** A report full of high-severity CONFIRMED findings is still just a report until a separate, later, explicit request asks for it to be acted on.
+
+## Audit domains
+
+Fixed set of 11 (`adaptive-audit-plan/references/audit-domains.md`) — kept stable across runs so the Audit-Debt Ledger stays comparable over time; a project that genuinely needs something outside this list gets a caveat in the plan, not an ad-hoc 12th domain.
+
+| Domain | What it checks for | Depth range |
+|---|---|---|
+| `security` | Auth/session/token handling, payment/PII, deserialization, raw SQL, subprocess/exec/eval, crypto, public endpoints | Quick: pattern scan · Standard: trace one attack path per class · Deep: safe reproduction, dependency CVEs |
+| `correctness` | Logic errors, off-by-one, null/undefined handling, edge cases against intended behavior | Quick: obvious errors in changed code · Standard: trace business-logic paths · Deep: enumerate edge cases per function |
+| `performance` | N+1 patterns, blocking calls in a request path, large in-memory structures, hot paths | Quick: anti-pattern scan · Standard: algorithmic complexity of hot paths · Deep: candidate benchmarks, run if possible |
+| `reliability` | Missing timeout/retry on external calls, unhandled panics, dead-letter/retry gaps | Quick: error handling exists at all · Standard: trace failure propagation · Deep: partial-failure and retry-storm scenarios |
+| `architecture` | God-files/functions, circular imports, unclear module boundaries, duplicated logic | Quick: obvious violations · Standard: map actual vs. intended dependency graph · Deep: propose a concrete restructuring |
+| `data-integrity` | Missing validation before persistence, multi-step writes without transactions, denormalized data | Quick: validation at persistence boundaries · Standard: trace multi-step writes · Deep: migration reversibility, partial-application behavior |
+| `concurrency` | Shared mutable state across goroutines/threads/async tasks, lock ordering | Quick: flag shared mutable state · Standard: trace lock usage for races/deadlocks · Deep: reason about interleavings, run a race detector |
+| `dependency-health` | Stale lockfiles, unpinned versions, packages with frequent CVEs, vendored code | Quick: list ancient pinned versions · Standard: cross-reference known CVEs · Deep: transitive tree, license, vendoring integrity |
+| `configuration-deployment` | Hardcoded secrets, unsafe config defaults, CI/CD and IaC definitions | Quick: no plaintext secrets · Standard: safe defaults under misconfiguration · Deep: trace the deploy pipeline for a single point of failure |
+| `test-coverage` | High-risk modules with no test file, tests that only exercise the happy path | Quick: does the riskiest code have any test · Standard: do tests exercise failure/edge paths · Deep: which untested branches matter most, and why |
+| `observability` | Reliability-flagged code with no log/metric on failure, no way to confirm success | Quick: failure paths emit at least a log line · Standard: critical operations have a success signal · Deep: what an on-call person would actually need |
+
+Every domain scored high on project signals or blast radius but *not* selected still gets a stated reason in the plan output — never silently dropped.
+
+## The Audit-Debt Ledger
+
+Modeled on the `Artifact`/`ProductionReceipt` pattern from [`kajisho5/AI-video-production-OS`](https://github.com/kajisho5/AI-video-production-OS)'s `docs/SPEC.md`: one content-addressed record per completed run, kept outside the audited project (`~/.adaptive-audit/projects/<fingerprint>/{receipts,results}/`), never touching the target repo's own git status.
+
+- **Plan receipts** record what was decided — selected/excluded, depth, reasoning — written by `adaptive-audit-plan`.
+- **Execution results** record what was *actually* Hunted and Verified, linked back to the plan they executed — written by `adaptive-audit-execute`. A domain only counts toward reduced debt once it has a real execution result, not merely a plan intent.
+- `scripts/receipts.py debt` (or the human-readable `report`, or `export-csv` for a spreadsheet) computes, per domain: how many times selected vs. excluded, the deepest it's ever been verified, and how many runs since it was last verified at Deep. A domain unverified across many runs — or repeatedly excluded regardless of how each request happened to be framed — surfaces as **UNAUDITED**, **PLANNED-ONLY**, **STALE**, or **AGING**, disclosed even when the current request never mentions that domain.
+- The STALE/AGING thresholds (3 and 2 runs) are a disclosed heuristic, not a calibrated constant — see the comment directly above `_debt_status()` in `receipts.py` for the reasoning and for how to change them if your own audit cadence doesn't fit.
+- A **diff-scoped re-audit** (`adaptive-audit-plan` step 0.5) is offered — never decided silently — only when a prior full audit exists and the change since is clearly small (≤15% of tracked files, ≤20 files). It shows which domains carry real debt a diff-only pass won't touch, and tracks itself separately (`diff_checks_since_last_full`) so it's never mistaken for full re-verification.
+
+## Remediate (opt-in)
+
+A plain audit request never fixes anything — no matter how severe the findings. Only a **separate, explicit follow-up** ("直して", "直してPRにして") triggers `adaptive-audit-execute` step 6:
+
+- Defaults to every CONFIRMED finding when none are named; a PLAUSIBLE finding is never fixed without being asked about first.
+- Checks, and states plainly *before* touching any file, whether this session can actually write to the project and — only if a PR/push was requested — whether it can push to or open a PR against that destination. A requested end-state already known to be impossible (no remote configured, no push credential) never retroactively authorizes a lesser, unrequested action like committing locally.
+- Fixes minimally, one finding at a time, scoped to exactly the finding's own failure scenario. Adds or extends a test — and, critically, verifies that test actually has the power to catch the bug (fails against the *original* code first, via the ecosystem's race detector for concurrency findings, a structural assertion for performance ones) rather than trusting a single after-the-fix pass.
+- Never commits or pushes without being asked to; states exactly which of {fix written, tested, committed, pushed, PR opened} happened.
+- Never touches the Audit-Debt Ledger — fixing a finding isn't the same claim as re-verifying its domain.
+
+**This step is explicitly not a differentiator.** Anthropic's own `/security-review` and Snyk's official Claude Skill already do scan-then-fix (the latter with an optional PR step); what Remediate adds is only that it stays inert until asked, and never conflates "fixed" with "re-verified."
+
+## Invariant Extraction (opt-in, public beta)
+
+The single most novel and least-validated idea from the original research (`adaptive-audit-execute/references/invariant-extraction.md`): instead of hunting domain-by-domain, extract 5-10 plain-English invariants purely from the code's own structure *before* looking for violations, then check each one independently.
+
+Validated across four trials so far — repeatedly rediscovering a prior audit's most severe findings via a completely different reasoning path, and twice finding real issues the domain-based pipeline had missed. Every one of those trials, though, was run by this project's own author using this project's own verification methodology — not independent evidence. **[Issue #12](https://github.com/kajisho5/adaptive-audit/issues/12) is an open call for third-party trial reports** on your own projects, positive or negative — exactly the evidence needed before this could reasonably move past opt-in status.
 
 ## How this compares to existing tools
 
-Stated plainly, not just linked, since it's easy to miss inside a large
-research doc: **if your need is security-only, an existing tool likely
-already covers most of this pipeline, and this repo doesn't claim otherwise.**
+Stated plainly, not just linked from a research doc: **if your need is security-only, an existing tool likely already covers most of this pipeline, and this project doesn't claim otherwise.**
 
-- [`cloudflare/security-audit-skill`](https://github.com/cloudflare/security-audit-skill)
-  and [`dinosn/raptor-loop-hunt`](https://github.com/dinosn/raptor-loop-hunt)
-  both implement the Hunt → adversarial Verify → independent-check pattern
-  this repo also uses, for security specifically, with real-world track
-  records this repo doesn't have (raptor-loop-hunt reports 200+ verified
-  findings across 40+ real codebases; this repo's own validation is 3
-  redacted real-project runs, see "Cost" below). If security is the whole
-  need, either is a reasonable choice on its own.
-- What this repo adds on top, as far as a competitive search could confirm
-  (see the research doc for the full method and caveats — absence of a
-  match in that search is reported as "not found," never as "doesn't
-  exist"): **treating "what to audit" as domain-agnostic rather than
-  security-specific**, and **tracking audit debt across audit *types*, not
-  just repeated runs of the same one** (`scripts/receipts.py` — a domain
-  like `performance` or `data-integrity` that keeps getting skipped shows up
-  as debt the same way a stale security pass would).
-- The opt-in Remediate step (`adaptive-audit-execute` step 6) is explicitly
-  **not** part of that differentiation — see its own description above.
+| Project | Type | Overlap | This project's own status by comparison |
+|---|---|---|---|
+| [`cloudflare/security-audit-skill`](https://github.com/cloudflare/security-audit-skill) | Claude Skill | Same Hunt → adversarial Verify → independent-check pattern, security-specific | No comparable real-world track record — this project's own validation is 3 redacted full-domain audits, see [Validated so far](#validated-so-far) |
+| [`dinosn/raptor-loop-hunt`](https://github.com/dinosn/raptor-loop-hunt) | Claude Skill | Same pattern, plus a persistent coverage ledger, security-specific | Reports 200+ verified findings across 40+ real codebases — a scale this project has not run at |
 
-## What's here
+What this project adds, as far as a competitive search could confirm (absence of a match is reported as "not found," never as "doesn't exist" — see `research/adaptive-audit-competitive-research.md` for the full method): treating "what to audit" as **domain-agnostic** rather than security-specific, and **tracking audit debt across audit types**, not just repeated runs of the same one. The opt-in Remediate step is explicitly *not* part of that differentiation — see [above](#remediate-opt-in).
 
-- `adaptive-audit-plan/` — the planning skill: `SKILL.md`,
-  `references/audit-domains.md` (the fixed domain taxonomy), and
-  `scripts/receipts.py`.
-- `adaptive-audit-execute/` — the execution skill: `SKILL.md`, and its own
-  copies of `references/audit-domains.md` and `scripts/receipts.py` (each
-  skill folder is self-contained and independently copyable, per Claude Code
-  Skill convention, even though the two are meant to be installed together —
-  `receipts.py` is duplicated rather than shared across skill-folder
-  boundaries for that reason).
-- `evals/` — synthetic fixture projects, test prompts, and validation notes
-  used to check both skills behave as intended, including across real
-  sequential runs.
-- `research/` — the pre-implementation competitive/differentiation research.
-- `tests/` — automated pytest regression tests for `scripts/receipts.py`
-  (run in CI via `.github/workflows/test.yml`). This is the one part of the
-  project that's pure, deterministic logic rather than LLM output, so it's
-  the one part an automated test suite can actually protect — `SKILL.md`
-  behavior itself is still checked by hand-run evals in `evals/`, not CI.
-- `VERSION` / `CHANGELOG.md` — version bookkeeping, auto-maintained by
-  `.github/workflows/release.yml` + `scripts/bump_version.py` (see
-  "Repository automation" below) once a merge lands on `main`. `VERSION`
-  is also the version the `.claude-plugin/marketplace.json` plugin entry
-  must be kept in sync with (enforced by `tests/test_versioning.py`) — see
-  "Install as a plugin" below for what that's actually for.
-- `.claude-plugin/marketplace.json` — makes this repo self-hostable as a
-  single-plugin Claude Code marketplace, so an installed copy can actually
-  be updated with a command instead of a manual re-copy. See "Install as a
-  plugin" below.
-- `scripts/bump_version.py` — this repo's own release-version/changelog
-  logic (not a skill script; those live under each skill's own `scripts/`).
-  See "Repository automation" below.
-- `SECURITY.md` — points to GitHub's private vulnerability reporting flow
-  for this repo itself; unrelated to `adaptive-audit-execute`'s own
-  security-domain audit findings about a *target* project.
+## Validated so far
 
-## Usage
+| Result | What was tested |
+|---|---|
+| 4 domains, 0 domain-selection mismatches | Iteration 1: skill-applied vs. baseline plans across 4 fixtures, including one adversarial case (a hardcoded payment API key outside the requested scope) the baseline missed entirely and the skill caught via the blast-radius floor |
+| 3 real, unfamiliar third-party projects | Full multi-domain Standard/Deep audits — 1.7M / 1.53M / 1.05M tokens respectively (see [Cost](#cost)); findings redacted, see `evals/validation-notes.md` |
+| 4 invariant-extraction trials, 0 false positives (n too small for a rate) | Independently rediscovered prior audits' most severe findings via a different reasoning path; twice found real issues domain-based Hunt had missed, including on a ~20,571-line C codebase |
+| 5 Remediate trials across Python / Go / Node | Performance, concurrency, and SQL-injection bug classes; push-possible and push-impossible destinations; single- and multi-finding requests — every fix independently verified via an A/B check against the original bug, not asserted from reading the diff |
 
-Two ways to install these skills — same skills, same behavior either way,
-different update story:
+Full narrative for all of the above, including every judgment call and its reasoning, in `evals/validation-notes.md`.
 
-**Plain copy** (no update mechanism — you re-copy by hand whenever you want
-the latest): copy `adaptive-audit-plan/` to `.claude/skills/adaptive-audit-plan/`
-and `adaptive-audit-execute/` to `.claude/skills/adaptive-audit-execute/`.
+## Install
 
-**As a plugin** (recommended if you want to actually pick up updates):
+**As a plugin** (recommended — gives an installed copy a real update path):
 ```
 /plugin marketplace add kajisho5/adaptive-audit
 /plugin install adaptive-audit@adaptive-audit
@@ -197,79 +172,13 @@ Later, to pull in whatever's newest on `main`:
 ```
 /plugin marketplace update adaptive-audit
 ```
-This is a personal/third-party marketplace (not an official Anthropic one),
-so Claude Code's automatic background auto-update is **off by default** for
-it — `/plugin marketplace update` above is the manual pull. To make it
-actually automatic with no command needed, enable it yourself per-marketplace:
-`/plugin` → Marketplaces → `adaptive-audit` → Enable auto-update. Either way,
-skill auto-invocation (just saying "バグチェックして", no slash command) works
-identically for a plugin-installed skill as for a manually copied one — the
-`/adaptive-audit:...` slash-command form this adds is an alternative, not a
-requirement.
+This is a personal/third-party marketplace, not an official Anthropic one, so Claude Code's background auto-update is off by default for it — the command above is the manual pull, or enable it per-marketplace via `/plugin` → Marketplaces → `adaptive-audit` → Enable auto-update. Skill auto-invocation ("バグチェックして", no slash command) works identically either way.
 
-Either way, just ask "バグチェックして" — that produces a plan and then
-actually runs it in one go, without needing a second command. Ask for
-"計画だけ欲しい" / "何を確認すべきか教えて" instead if you only want the
-scoping decision without it being carried out yet.
-
-## Repository automation
-
-This repo's own GitHub automation (not the skills' behavior):
-
-- **`.github/workflows/release.yml`** — a single job on every push to
-  `main`: resolves the next version from merged-PR labels via
-  `release-drafter` (dry-run only — it never creates its own release),
-  respects a manual `VERSION` bump instead of overwriting it (auto-bump
-  only fires when `VERSION` still matches the latest tag), then runs
-  `scripts/bump_version.py` to update `VERSION`/`CHANGELOG.md`/
-  `.claude-plugin/marketplace.json`, commits, tags, and creates the GitHub
-  Release — all in one job, deliberately not split by a tag-push trigger
-  (a push made with the default `GITHUB_TOKEN`, like this job's own commit
-  and tag, never triggers another workflow run, so a second,
-  tag-triggered workflow would simply never fire). There's a publish step
-  too, wired to skip cleanly since this repo has no npm/PyPI package to
-  publish — see the workflow's own comments.
-- **`.github/workflows/autolabel.yml`** — applies `major`/`feature`/
-  `fix`/`chore` labels to merged PRs (via `release-drafter`'s autolabeler,
-  triggered on `pull_request_target` so it also covers fork PRs), which is
-  what gives `release.yml` real labels to resolve a version from instead
-  of always falling back to its `patch` default. Also creates those 5
-  labels on first run if they don't already exist yet.
-- **`.github/dependabot.yml`** — `github-actions` only. Deliberately
-  excludes the `package.json`/`requirements.txt` files under
-  `evals/fixtures/*/` — those are frozen, sometimes-deliberately-vulnerable
-  synthetic test corpora for the skills' own evals, not live dependencies
-  of this repo.
-- **`.github/workflows/codeql.yml`** — scans this repo's actual Python
-  source (`scripts/bump_version.py`, both `receipts.py` copies,
-  `tests/*.py`) on every PR, push to `main`, and weekly; explicitly
-  excludes `evals/fixtures/**` for the same reason Dependabot does.
-- **`.github/pull_request_template.md`** — matches this repo's existing
-  Summary/Test plan PR convention.
-- **`SECURITY.md`** — points to GitHub's private vulnerability reporting
-  flow, not a personal contact address.
-
-`scripts/bump_version.py` (the core version-bump/changelog-generation logic
-behind `release.yml`) reads commit subjects via `git log` at runtime rather
-than interpolating any PR title, commit message, or other untrusted string
-directly into a `${{ }}`-templated shell command — the known GitHub Actions
-script-injection pattern this is written to avoid. Covered by
-`tests/test_bump_version.py`, including a test that a commit subject
-containing shell metacharacters (`` $(...) ``, backticks, quotes) ends up
-as literal text in `CHANGELOG.md`, never executed.
+**Plain copy** (no update mechanism — re-copy by hand for the latest): copy `adaptive-audit-plan/` and `adaptive-audit-execute/` into `.claude/skills/`.
 
 ## Cost
 
-**Running this consumes your own Claude Code usage/API budget — whoever's
-session runs the skill pays for that session's tokens, nobody else's.** There
-is no shared backend and no mechanism for cost to land on anyone but the
-person who typed the request. If you install this and run a Deep-depth audit,
-that cost is yours; if someone else installs it from wherever you share it
-and runs their own audit, that cost is theirs.
-
-That cost is real and not small once you're past a Quick check. Measured
-against real, unfamiliar third-party projects (not toy fixtures), a full
-multi-domain audit at Standard/Deep depth has run:
+**Running this consumes your own Claude Code usage/API budget.** No shared backend, no mechanism for cost to land on anyone but whoever typed the request.
 
 | Language / shape | Size | Domains | Tokens |
 |---|---|---|---|
@@ -277,13 +186,33 @@ multi-domain audit at Standard/Deep depth has run:
 | C/C++ network-facing library | ~20,600 lines | 7 | ~1.53M |
 | TypeScript/Node web app | ~10,900 lines | 6 | ~1.05M |
 
-(Project names withheld deliberately — see `evals/validation-notes.md` for
-why some real-world findings from these runs are redacted there too.)
+(Project names withheld deliberately — see `evals/validation-notes.md`.) A Quick-only pass or a plan-only request costs a small fraction of this — depth drives cost, not project size alone. Say so explicitly ("さっと見て" / "軽くチェックして") if cost matters more than thoroughness for a given ask; the plan step reads that as a depth signal.
 
-A Quick-only pass, or a plan-only request ("計画だけ欲しい"), costs a small
-fraction of this — the depth you ask for (or that the plan assigns) is what
-drives cost, not project size alone (a large but structurally repetitive
-codebase can cost less than a smaller, denser one — see
-`evals/validation-notes.md` for the full breakdown). If cost matters more
-than thoroughness for a given ask, say so explicitly ("さっと見て" / "軽く
-チェックして") — the plan step reads that as a depth signal.
+## Development
+
+```
+python3 -m pytest tests/ -v      # scripts/receipts.py + scripts/bump_version.py — the only deterministic, non-LLM logic here
+python3 <skill-dir>/scripts/receipts.py report --project-root <path>   # human-readable Audit-Debt table
+```
+
+`SKILL.md`'s actual LLM-driven behavior can't be unit-tested — it's checked by running a real agent against `evals/fixtures/` and recording what happened in `evals/validation-notes.md`. A change to either `SKILL.md` that alters behavior should come with a new validation-notes.md entry, not just updated prose. See `CONTRIBUTING.md` for the full workflow.
+
+**Repository automation** (not the skills' own behavior): `.github/workflows/release.yml` runs on every push to `main` — resolves the next version from merged-PR labels via `release-drafter`, respects a manual `VERSION` bump instead of overwriting it, updates `VERSION`/`CHANGELOG.md`/`marketplace.json`, tags, and creates the GitHub Release, all in one job. `autolabel.yml` applies the labels that resolution reads. `codeql.yml` scans this repo's own Python source, deliberately excluding `evals/fixtures/**`'s frozen, sometimes-deliberately-vulnerable synthetic test corpora — `dependabot.yml` excludes the same paths for the same reason.
+
+## Docs
+
+| | |
+|---|---|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | repo layout, testing (both the pytest suite and the eval methodology), how to add a new `SKILL.md` step |
+| [SECURITY.md](SECURITY.md) | how to report a vulnerability in this repo's own code privately |
+| [`adaptive-audit-plan/SKILL.md`](adaptive-audit-plan/SKILL.md) | the scoping process the planning skill follows |
+| [`adaptive-audit-execute/SKILL.md`](adaptive-audit-execute/SKILL.md) | Hunt → Verify → Remediate, step by step |
+| [`adaptive-audit-plan/references/audit-domains.md`](adaptive-audit-plan/references/audit-domains.md) | the fixed 11-domain taxonomy in full |
+| [`adaptive-audit-execute/references/invariant-extraction.md`](adaptive-audit-execute/references/invariant-extraction.md) | the opt-in invariant-extraction technique, all four trials in full |
+| [`research/adaptive-audit-competitive-research.md`](research/adaptive-audit-competitive-research.md) | the pre-implementation competitive analysis, feature matrix, naming investigation |
+| [`evals/validation-notes.md`](evals/validation-notes.md) | every validation run, iteration by iteration, judgment calls included |
+| [CHANGELOG.md](CHANGELOG.md) | what changed in each release |
+
+## License
+
+[MIT](LICENSE)
