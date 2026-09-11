@@ -1001,3 +1001,51 @@ verified this run.
 Documentation-only change (no `receipts.py` logic involved) — not yet
 validated against a real project either, same open gap as the rest of
 iteration 16.
+
+## Iteration 17 — explicit opt-in to save the findings report into the project
+
+Another follow-up in the same conversation: for the person's own project (as
+opposed to the third-party targets this project's own validation history is
+built on), it's reasonable to want the findings report kept with the project
+rather than only surfaced in chat. Added to `adaptive-audit-execute` only
+(not `adaptive-audit-plan` — a plan-only run's output is less clearly worth
+persisting the same way a findings report is, so this stayed scoped to where
+the actual use case is): step 0 now also detects an explicit request to save
+the report into the project, and step 4.5 (new) writes it to
+`docs/audit-reports/<date>-<slug>.md` when that request was present.
+
+**Deliberately not auto-detected from repo ownership.** Checking whether a
+target repo is "the person's own" (matching a git remote's owner against
+some notion of the current user) was considered and rejected: this skill's
+"never writes to the audited project" guarantee is part of what its own
+real-world validation runs against third-party projects (obs-studio,
+open-saas, yamaha-rcp-osc-bridge) rely on for trust, and a misclassification
+here — writing into a repo that isn't actually the requester's to write
+into — would be a real, hard-to-undo mistake with no clean recovery. An
+explicit per-request signal (the same pattern already used for dry-run mode
+and the freshness check) has no such failure mode: worst case, the option
+just doesn't trigger when it could have.
+
+**Committing is explicitly left to the person, never done by the skill.**
+Writing the file is what was asked for; `git add`/`git commit` is a separate,
+visible action affecting the project's own history, which this project's
+broader operating conventions already treat as something requiring a human
+decision, not something a skill should do on someone's behalf just because
+adjacent behavior was authorized.
+
+**Security-content permanence is called out explicitly, not left implicit.**
+A report containing a real, currently-unpatched vulnerability description
+becomes part of git's permanent history the moment it's committed —
+recoverable forever unless history itself is rewritten, even after the
+underlying code is fixed. Step 4.5 requires surfacing this in the chat
+response itself (not just as a line inside the written file, which is easy
+to miss) whenever the report being saved contains a CONFIRMED/PLAUSIBLE
+security finding or another medium/high-severity unpatched issue, so the
+person has that information before deciding whether to commit, not after.
+
+`receipts.py`'s own records (plan receipts, execution results) are
+unaffected and stay external regardless of this setting — they're
+operational debt-tracking data, not the human-readable deliverable this
+feature is about, and mixing the two was rejected on that basis alone.
+
+Documentation-only change — not yet validated against a real project.

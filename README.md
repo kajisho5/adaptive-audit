@@ -88,6 +88,18 @@ project's tracked files) and warns plainly, asking before proceeding, if the
 local checkout is behind its remote — auditing (or diff-sizing against)
 stale code silently is worse than admitting the checkout isn't current.
 
+`adaptive-audit-execute` otherwise never writes to the audited project, with
+one explicit opt-in: if the request explicitly asks for the findings report
+to be saved into the project itself, it writes the same report to a file
+under `docs/audit-reports/` (never `git add`/`git commit`s it — that stays
+the person's own decision) — but only when explicitly asked, never inferred
+from anything about the project (this skill has no reliable way to verify
+who owns a repo, so ownership is never the trigger). If the report being
+saved contains an unpatched security finding, it says so plainly in the
+chat response before the person decides whether to commit: committing it
+makes that detail part of the repository's git history permanently, even
+after the underlying issue is fixed.
+
 See `research/adaptive-audit-competitive-research.md` for the full competitive
 analysis, feature matrix, and naming investigation behind these decisions.
 

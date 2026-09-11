@@ -1,6 +1,6 @@
 ---
 name: adaptive-audit-execute
-description: THE DEFAULT SKILL for any "check/review/audit this code" request, including a first, vague, unqualified one like "バグチェックして", "check this for bugs", "review this before we ship", "make sure this is solid" — with no other signal, this is the skill to use, not adaptive-audit-plan alone. Produces a scoped plan first (by following adaptive-audit-plan's process — inspecting the actual project and deciding which domains/depths genuinely matter, exactly as adaptive-audit-plan would on its own) and then, in the same response, actually carries it out: an isolated Hunt pass per selected domain, then a separate isolated Verify pass that independently checks each candidate against the source before it's reported (CONFIRMED/PLAUSIBLE/REJECTED) — real findings, not just a plan. A natural-language request producing a real, complete audit end to end, with no required follow-up question, is the entire point of this project; use adaptive-audit-plan by itself only when the person explicitly wants scoping without execution ("何を確認すべきか教えて", "計画だけ欲しい", "まだ実行しないで", "先に方針を確認したい", "what should we look at, don't actually check yet") — that is the exception this skill is not for, not the other way around. Never audits the target project's own files — reads only, and any reproduction/PoC work happens outside the project directory. Respects an explicit read-only/dry-run request (skips writing the execution result; the audit itself still runs and still reports real findings) rather than treating "don't touch anything" as a reason to decline the whole audit.
+description: THE DEFAULT SKILL for any "check/review/audit this code" request, including a first, vague, unqualified one like "バグチェックして", "check this for bugs", "review this before we ship", "make sure this is solid" — with no other signal, this is the skill to use, not adaptive-audit-plan alone. Produces a scoped plan first (by following adaptive-audit-plan's process — inspecting the actual project and deciding which domains/depths genuinely matter, exactly as adaptive-audit-plan would on its own) and then, in the same response, actually carries it out: an isolated Hunt pass per selected domain, then a separate isolated Verify pass that independently checks each candidate against the source before it's reported (CONFIRMED/PLAUSIBLE/REJECTED) — real findings, not just a plan. A natural-language request producing a real, complete audit end to end, with no required follow-up question, is the entire point of this project; use adaptive-audit-plan by itself only when the person explicitly wants scoping without execution ("何を確認すべきか教えて", "計画だけ欲しい", "まだ実行しないで", "先に方針を確認したい", "what should we look at, don't actually check yet") — that is the exception this skill is not for, not the other way around. Never audits the target project's own files — reads only, and any reproduction/PoC work happens outside the project directory — except the one explicit opt-in of saving the findings report itself into the project (step 4.5), triggered only by an explicit request, never assumed. Respects an explicit read-only/dry-run request (skips writing the execution result; the audit itself still runs and still reports real findings) rather than treating "don't touch anything" as a reason to decline the whole audit.
 ---
 
 # Adaptive Audit — Plan Executor
@@ -68,6 +68,18 @@ executed, in the plan's stated execution order. Excluded domains stay excluded �
 this skill carries out a decision, it doesn't second-guess it. If the user wants
 a previously-excluded domain audited too, that's a new planning input, not
 something for this skill to decide on its own.
+
+**Also check for an explicit request to save the report into the project
+itself** ("自分のリポジトリだから結果を残しておいて", "監査結果をこのリポジトリ
+に保存して", "レポートをファイルとして残して", "save the report in this repo",
+"commit the findings somewhere"). This is the one deliberate exception to this
+skill otherwise never writing to the audited project — and it stays an
+exception triggered only by an explicit request, never inferred from anything
+about the project itself (who owns it, whether it looks like "your own"
+project, etc.) — this skill has no reliable way to verify repo ownership, so
+that can never be the trigger. No such request → never write into the
+project, full stop, exactly as before. See step 4.5 for what this actually
+does.
 
 **If the plan's `scope` is `"diff"`** (adaptive-audit-plan's step 0.5 —
 offered only for a change small enough to ask about, and only after the
@@ -266,6 +278,42 @@ worst-wins: FAIL if any CONFIRMED finding is high or medium severity, WARN if
 only low-severity CONFIRMED or any PLAUSIBLE findings exist, PASS if every
 executed domain came back clean, UNKNOWN if nothing was actually executed (step
 3 found a shortfall covering everything).
+
+### 4.5. Save the report into the project — only if step 0 found that explicit request
+
+Skip this step entirely unless step 0 found an explicit request to save the
+report into the project itself. When it did:
+
+1. Write the exact same findings report from step 4 to a file inside the
+   project — suggested path `docs/audit-reports/<ISO date>-<short-slug>.md`
+   (e.g. `docs/audit-reports/2026-09-11-security-correctness.md`), creating
+   the directory if needed. This is a real write to the target project — the
+   one place in this skill's whole process where that's true — because the
+   person explicitly asked for it this run, not because it's ever the
+   default.
+2. **Never `git add` or `git commit` it.** Writing the file is what was asked
+   for; staging and committing is a separate decision that stays the
+   person's to make, not something to do on their behalf just because
+   writing the file was authorized.
+3. **If the report contains any CONFIRMED or PLAUSIBLE finding in the
+   `security` domain, or any medium/high-severity finding describing a
+   presently-unpatched issue**, say so plainly and prominently in the chat
+   response (not just inside the written file) — something like: this file
+   now contains unpatched vulnerability detail, and committing it makes that
+   detail part of the repository's git history permanently (recoverable
+   forever unless history itself is later rewritten), even after the
+   underlying code is fixed. This is information the person needs *before*
+   deciding whether to commit, not a footnote in the file itself where it's
+   easy to miss.
+4. State in the 実行サマリー that the report was also written to a file, its
+   path, and whether the warning in point 3 applied.
+
+This is entirely separate from step 5's `receipts.py` result record, which
+stays external (`~/.adaptive-audit/...`) regardless of whether this step ran
+— the two serve different purposes (a human-readable deliverable the person
+explicitly asked to keep with the project, vs. this skill's own operational
+debt-tracking data, which was never meant to live inside the audited
+project's own history).
 
 ### 5. Record the outcome — unless step 0 found a dry-run constraint
 
