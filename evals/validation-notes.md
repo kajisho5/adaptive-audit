@@ -1191,9 +1191,73 @@ project's standard that a step counts as validated only once a real trial
 exists for the case in question, not merely once its documentation reads
 plausibly.
 
-**Not yet validated**: a trial fixing more than one finding in the same
-turn (does step 6.1's "default to every CONFIRMED finding" behavior
-actually fix all of them, or does an agent tend to stop after the first).
+## Iteration 22 — multiple findings in one turn (the last of the three originally-flagged gaps)
+
+Closes iteration 21's remaining open item. Two separate CONFIRMED
+`security` findings against a fresh disposable copy of
+`evals/fixtures/webapp-auth-payment` (`npm install`'d for real — express,
+jsonwebtoken, pg, stripe): a SQL-injection-via-string-built-query in
+`routes/auth.js`'s `login()`, and two more in `routes/payments.js`'s
+`handleWebhook()`. A third real issue in the same fixture (missing Stripe
+webhook signature verification) was deliberately left **not** CONFIRMED in
+the scenario, to check scope discipline held under a multi-finding load
+too. Follow-up: plain "直して", naming no finding numbers.
+
+**Result: both findings fixed, not just the first**, confirming step 6.1's
+"default to every CONFIRMED finding when none are named" actually holds
+under real multi-finding load rather than an agent tending to stop after
+the first one. Both fixes correctly used `pg`'s `$1`/`$2` parameter
+placeholders instead of further string-building. The untouched third issue
+was verified byte-for-byte unchanged (`require('stripe')(...)` and both of
+its explanatory comments identical to the original) — scope discipline
+held with two findings in play, not just one.
+
+**Verification, with no live Postgres available**: the fixture has no test
+framework at all (`package.json` has no `devDependencies`, no test
+script). Rather than skip verification (which 6.3 already forbids), the
+subagent stubbed the actual boundary — monkey-patching the shared
+`lib/db.js` `query` function via Node's module cache — and ran real
+injection payloads (`' OR '1'='1'`; stacked `; DROP TABLE ...` statements)
+through both fixed routes, capturing the literal SQL text and params sent
+to the stub. It then did the same A/B check iteration 21 established for
+concurrency findings, generalized here to SQL injection on its own
+initiative: `git stash`'d the two fixes back to the
+original vulnerable code and re-ran the identical script, which genuinely
+reproduced the injection (the attacker string spliced directly into the
+captured SQL text) before `git stash pop` restored the fix and confirmed
+it clean again. This is exactly the "a test claiming to catch a bug must
+be shown to have the power to catch it" principle from iteration 20/21,
+now demonstrated to generalize on an agent's own judgment to a third bug
+class (injection) that step 6.3 doesn't name specifically — the general
+principle sentence added in iteration 21 (apply this by judgment for any
+bug class the list doesn't cover) did its job.
+
+**One execution inconsistency, not a new SKILL.md gap**: this trial's
+report folded 6.2's write/push-access disclosure into the single final
+report rather than emitting it as a genuinely separate message before any
+file was touched, unlike iterations 20-21's trials. Since those prior
+trials — run in the identical single-subagent-turn harness as this one —
+*did* successfully emit that disclosure as a distinct piece of output
+before their first edit, this looks like inconsistent execution on this
+particular run rather than a structural limitation the SKILL.md wording
+needs to account for. Noted here rather than silently smoothed over, but
+not treated as grounds for another SKILL.md edit — a single trial
+deviating once, when two prior trials in the same shape did it correctly,
+isn't yet evidence of a wording problem.
+
+**Conclusion (iteration 22)**: this closes all three gaps iteration 20's
+initial trial left open (push/PR-impossible handling, a non-Python target,
+multiple findings in one turn). Step 6 has now been exercised across
+Python/pandas, Go/goroutines, and Node/SQL, across performance,
+concurrency, and injection bug classes, across single- and multi-finding
+requests, and across push-possible and push-impossible destinations — five
+real trials total (iterations 20-22), each independently verified rather
+than asserted, with every SKILL.md wording gap they found fixed directly
+from that evidence. Not a claim that step 6 is now exhaustively validated
+— eval coverage is not the same as formal verification, and this project
+draws that distinction elsewhere too (see the "Not yet validated" lines
+throughout this file) — but it is no longer the documentation-only,
+zero-trial state it shipped in.
 
 ## Iteration 18 — self-hosted plugin marketplace, closing the actual gap the version-bookkeeping addition (iteration 16-17-adjacent) didn't
 

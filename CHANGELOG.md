@@ -46,7 +46,21 @@ field in sync with this one — `tests/test_versioning.py` enforces it.
   the new test fails against the unfixed code, via the ecosystem's race
   detector, before trusting it against the fix), stated as the same
   underlying principle as the performance case rather than a one-off carve
-  out. Still not validated: fixing more than one finding in the same turn.
+  out.
+- `adaptive-audit-execute` step 6 (Remediate): a third trial (iteration 22)
+  closes the last originally-flagged gap — two CONFIRMED findings fixed in
+  one turn from a plain "直して" naming neither, confirming step 6.1's
+  "default to every CONFIRMED finding" actually holds under real
+  multi-finding load, with scope discipline verified to hold too (a third,
+  real but not-CONFIRMED issue in the same fixture was left untouched).
+  Step 6.3's "prove the test has power to catch the bug" principle was
+  applied by the trial's own subagent, unprompted, to a third bug class
+  (SQL injection) it isn't named for — no further `SKILL.md` change judged
+  necessary from this trial. Across iterations 20-22, step 6 has now been
+  exercised on Python, Go, and Node targets, across performance,
+  concurrency, and injection bug classes, and across single/multi-finding
+  and push-possible/impossible requests — five independently-verified
+  trials total, see `evals/validation-notes.md`.
 - `adaptive-audit-execute` step 6 (Remediate) validated with a real subagent
   trial against a disposable copy of the `cli-data-processor` fixture (see
   `evals/validation-notes.md` iteration 20) — the fix itself worked
