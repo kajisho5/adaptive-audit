@@ -158,7 +158,7 @@ What this project adds, as far as a competitive search could confirm (absence of
 | 4 domains, 0 domain-selection mismatches | Iteration 1: skill-applied vs. baseline plans across 4 fixtures, including one adversarial case (a hardcoded payment API key outside the requested scope) the baseline missed entirely and the skill caught via the blast-radius floor |
 | 3 real, unfamiliar third-party projects | Full multi-domain Standard/Deep audits — 1.7M / 1.53M / 1.05M tokens respectively (see [Cost](#cost)); findings redacted, see `evals/validation-notes.md` |
 | 4 invariant-extraction trials, 0 false positives (n too small for a rate) | Independently rediscovered prior audits' most severe findings via a different reasoning path; twice found real issues domain-based Hunt had missed, including on a ~20,571-line C codebase |
-| 5 Remediate trials across Python / Go / Node | Performance, concurrency, and SQL-injection bug classes; push-possible and push-impossible destinations; single- and multi-finding requests — every fix independently verified via an A/B check against the original bug, not asserted from reading the diff |
+| 4 Remediate trials across Python / Go / Node | Performance, concurrency, and SQL-injection bug classes; push-possible and push-impossible destinations; single- and multi-finding requests — every fix independently verified via an A/B check against the original bug, not asserted from reading the diff |
 
 Full narrative for all of the above, including every judgment call and its reasoning, in `evals/validation-notes.md`.
 
