@@ -1,6 +1,6 @@
-<h1 align="center">adaptive-audit</h1>
-
-<p align="center"><strong>Give your coding agent a real audit process, not a checklist.</strong></p>
+<p align="center">
+  <img src="assets/logo.png" alt="adaptive-audit — give your coding agent a real audit process, not a checklist" width="720">
+</p>
 
 <p align="center">
   Domain-agnostic scoping · Isolated Hunt → Verify · Cross-run Audit-Debt tracking<br>
@@ -39,7 +39,7 @@
 
 Most "review my code" tools run the same fixed checklist — usually security-only, or a generic style/lint pass — no matter what the project actually is or what the person actually asked. That wastes effort on domains that don't matter here and silently skips ones that do, with no record of the decision ever having been made:
 
-- **The request is a hint, not a ceiling.** "バグチェックして" on a payment webhook handler gets `security` and `data-integrity` scored and selected even though neither was named — a blast-radius floor for auth/payment/PII signals, not just keyword matching (`adaptive-audit-plan/SKILL.md` step 3).
+- **The request is a hint, not a ceiling.** "check this for bugs" on a payment webhook handler gets `security` and `data-integrity` scored and selected even though neither was named — a blast-radius floor for auth/payment/PII signals, not just keyword matching (`adaptive-audit-plan/SKILL.md` step 3).
 - **Scope decisions are never silent.** Every excluded domain gets a stated reason in the plan; a domain that scored high on project signals but wasn't selected says so explicitly, not just via omission.
 - **The plan gets attacked before it ships.** An isolated critic subagent argues against the plan itself — a mismatched depth, an exclusion that doesn't hold up, a signal that maps to no domain — before any Hunt pass runs.
 - **A hunter that expects to find things will find things.** Hunt and Verify run as separate, isolated subagents; Verify sees only the candidate's claim and the source, never the hunter's confidence or reasoning.
@@ -52,11 +52,11 @@ Most "review my code" tools run the same fixed checklist — usually security-on
 /plugin install adaptive-audit@adaptive-audit
 ```
 
-Then just talk to your agent:
+Then just talk to your agent, in whatever language you normally use — Japanese isn't required, it's just this project's own author's habitual phrasing throughout this README:
 
-> "バグチェックして" / "check this for bugs"
+> "check this for bugs" / "バグチェックして"
 
-The agent inspects the project, scores all 11 domains, runs `adaptive-audit-plan`'s self-critique, then `adaptive-audit-execute`'s isolated Hunt → Verify per selected domain — and reports back CONFIRMED / PLAUSIBLE findings with file:line evidence, in one response. No slash command needed; asking for it in plain language is the whole interface.
+The agent inspects the project, scores all 11 domains, runs `adaptive-audit-plan`'s self-critique, then `adaptive-audit-execute`'s isolated Hunt → Verify per selected domain — and reports back CONFIRMED / PLAUSIBLE findings with file:line evidence, in one response, translated into whatever language you asked in. No slash command needed; asking for it in plain language is the whole interface.
 
 Want the plan without running it? Ask for that instead:
 
