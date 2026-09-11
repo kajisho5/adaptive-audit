@@ -123,19 +123,47 @@ analysis, feature matrix, and naming investigation behind these decisions.
   project that's pure, deterministic logic rather than LLM output, so it's
   the one part an automated test suite can actually protect — `SKILL.md`
   behavior itself is still checked by hand-run evals in `evals/`, not CI.
-- `VERSION` / `CHANGELOG.md` — version bookkeeping only. Bumping `VERSION`
-  on `main` makes `.github/workflows/release.yml` tag it and create a
-  GitHub Release with auto-generated notes; it does **not** update anyone's
-  installed copy of these skills — see `CHANGELOG.md`'s own header for why
-  (no npm/PyPI package, no plugin-marketplace listing, so there's nothing
-  for a version bump to actually push out to).
+- `VERSION` / `CHANGELOG.md` — version bookkeeping. Bumping `VERSION` on
+  `main` makes `.github/workflows/release.yml` tag it and create a GitHub
+  Release with auto-generated notes. This is also the version the
+  `.claude-plugin/marketplace.json` plugin entry must be kept in sync with
+  (enforced by `tests/test_versioning.py`) — see the "Install as a plugin"
+  section below for what that's actually for.
+- `.claude-plugin/marketplace.json` — makes this repo self-hostable as a
+  single-plugin Claude Code marketplace, so an installed copy can actually
+  be updated with a command instead of a manual re-copy. See "Install as a
+  plugin" below.
 
 ## Usage
 
-Copy `adaptive-audit-plan/` to `.claude/skills/adaptive-audit-plan/` and
-`adaptive-audit-execute/` to `.claude/skills/adaptive-audit-execute/` so
-Claude Code discovers both. Just ask "バグチェックして" — that produces a plan
-and then actually runs it in one go, without needing a second command. Ask for
+Two ways to install these skills — same skills, same behavior either way,
+different update story:
+
+**Plain copy** (no update mechanism — you re-copy by hand whenever you want
+the latest): copy `adaptive-audit-plan/` to `.claude/skills/adaptive-audit-plan/`
+and `adaptive-audit-execute/` to `.claude/skills/adaptive-audit-execute/`.
+
+**As a plugin** (recommended if you want to actually pick up updates):
+```
+/plugin marketplace add kajisho5/adaptive-audit
+/plugin install adaptive-audit@adaptive-audit
+```
+Later, to pull in whatever's newest on `main`:
+```
+/plugin marketplace update adaptive-audit
+```
+This is a personal/third-party marketplace (not an official Anthropic one),
+so Claude Code's automatic background auto-update is **off by default** for
+it — `/plugin marketplace update` above is the manual pull. To make it
+actually automatic with no command needed, enable it yourself per-marketplace:
+`/plugin` → Marketplaces → `adaptive-audit` → Enable auto-update. Either way,
+skill auto-invocation (just saying "バグチェックして", no slash command) works
+identically for a plugin-installed skill as for a manually copied one — the
+`/adaptive-audit:...` slash-command form this adds is an alternative, not a
+requirement.
+
+Either way, just ask "バグチェックして" — that produces a plan and then
+actually runs it in one go, without needing a second command. Ask for
 "計画だけ欲しい" / "何を確認すべきか教えて" instead if you only want the
 scoping decision without it being carried out yet.
 

@@ -1049,3 +1049,69 @@ operational debt-tracking data, not the human-readable deliverable this
 feature is about, and mixing the two was rejected on that basis alone.
 
 Documentation-only change — not yet validated against a real project.
+
+## Iteration 18 — self-hosted plugin marketplace, closing the actual gap the version-bookkeeping addition (iteration 16-17-adjacent) didn't
+
+Iteration 17's `VERSION`/`CHANGELOG.md`/`release.yml` addition was explicit
+that it gave this project's own history a stable marker, nothing more — it
+did not, and could not, make an installed copy of these skills actually
+update. A follow-up question in the same conversation surfaced that this
+wasn't what was actually wanted: the person wanted their own installed
+copy to pick up new versions without a manual re-copy.
+
+Before implementing, three separate facts were verified against official
+Claude Code documentation (not assumed) via the `claude-code-guide` agent,
+since getting any of them wrong would have meant recommending a change
+that silently doesn't do what it claims to:
+
+1. Whether a plugin-sourced skill still gets automatically model-invoked
+   by its `description` field the same way a plain `.claude/skills/` one
+   does, or whether plugin packaging forces explicit `/plugin-name:skill`
+   invocation only. **Confirmed**: automatic invocation is preserved;
+   namespacing only affects the manual slash-command alias. This was the
+   one fact that mattered most — this project's founding premise is that a
+   bare "バグチェックして" triggers the skill with no explicit command, and
+   a change that silently broke that would have been a real regression.
+2. Whether a single repo can self-host both a marketplace and the one
+   plugin it lists (rather than needing a separate marketplace repo), and
+   whether the existing top-level `adaptive-audit-plan/`/
+   `adaptive-audit-execute/` folders could stay exactly where they are.
+   **Confirmed**: yes to both — a `skills` array field in the marketplace
+   entry can point at arbitrary paths relative to the plugin root, so no
+   file moves were needed.
+3. Whether adding `.claude-plugin/` breaks or coexists with the existing
+   plain-copy `.claude/skills/` install method documented in the README.
+   **Confirmed**: they coexist untouched (different namespaces).
+
+Added `.claude-plugin/marketplace.json` (one file, no restructuring):
+declares one plugin (`adaptive-audit`) whose `skills` field points at both
+existing folders. README's "Usage" section now documents both install
+paths side by side (plain copy: no update mechanism, vs. plugin: `/plugin
+marketplace add` + `/plugin install`, later `/plugin marketplace update` to
+pull the latest, with the honest caveat that auto-update itself is off by
+default for a third-party/personal marketplace like this one and has to be
+enabled per-marketplace if a fully hands-off flow is wanted).
+
+**Guardrail added, not just a feature**: `marketplace.json`'s plugin
+`version` field and the root `VERSION` file are two files a human now has
+to remember to bump together, with nothing enforcing that at write time —
+exactly the kind of drift `test_scripts_stay_identical` already guards
+against for the two `receipts.py` copies. Added
+`tests/test_versioning.py` (2 new tests: version fields match; the
+`skills` paths in `marketplace.json` actually exist and match the expected
+set) — 21 tests total now, up from 19.
+
+CHANGELOG.md's own header, which iteration 17 had written to say
+marketplace distribution "was deliberately not pursued," was corrected in
+the same change — it's no longer accurate as a blanket statement now that
+a personal/third-party marketplace exists; only *public* marketplace
+listing (npm/PyPI-style broad distribution) remains the thing that wasn't
+pursued, and the header now says so precisely instead of overclaiming in
+either direction.
+
+Not yet validated end-to-end against a real Claude Code session (adding
+the marketplace, installing from it, confirming auto-invocation actually
+fires post-install, running `/plugin marketplace update` after a new
+commit) — the facts above are verified against documentation, not by
+actually exercising the install flow in this project's own validation
+history yet.

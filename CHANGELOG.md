@@ -6,14 +6,18 @@ GitHub Release, created with auto-generated notes from the commits since
 the previous tag).
 
 **This is bookkeeping, not a package release.** adaptive-audit isn't
-published to npm, PyPI, or the Claude Code plugin marketplace — it's copied
-by hand into `.claude/skills/`. Bumping `VERSION` here does not update
-anyone's local copy; it only gives this project's own history a stable
-marker to refer to (in this file, in issues, in conversation) instead of a
-bare commit hash. See the README's "Cost" section and
-`research/adaptive-audit-competitive-research.md` §9 for why marketplace
-distribution (which would make version bumps meaningful to installed
-copies) was deliberately not pursued.
+published to npm, PyPI, or any public Claude Code plugin marketplace
+listing — bumping `VERSION` here doesn't push anything out on its own, and
+someone who installed via a plain `.claude/skills/` copy (see README
+"Usage") still has to re-copy by hand. It mainly gives this project's own
+history a stable marker to refer to (in this file, in issues, in
+conversation) instead of a bare commit hash.
+
+Since 0.1.0, this repo can also be self-hosted as a personal/third-party
+Claude Code marketplace (`.claude-plugin/marketplace.json` — see README
+"Install as a plugin"), which *does* give an installed copy a real update
+path (`/plugin marketplace update`). Keep that file's plugin `version`
+field in sync with this one — `tests/test_versioning.py` enforces it.
 
 ## [0.1.0] — first tracked release
 
@@ -43,6 +47,12 @@ is retroactive, not a description of what changed since some prior tag.
   save its findings report into the audited project itself
   (`docs/audit-reports/`), with an explicit warning before committing a
   report containing an unpatched security finding.
+- `.claude-plugin/marketplace.json`, letting this repo be installed and
+  actually updated as a Claude Code plugin (`/plugin marketplace add
+  kajisho5/adaptive-audit`, `/plugin install adaptive-audit@adaptive-audit`,
+  `/plugin marketplace update adaptive-audit`) as an alternative to the
+  plain manual-copy install — auto-invocation by request ("バグチェックして")
+  works identically either way.
 - Validated across several real, third-party projects (not just synthetic
   fixtures) — full history in `evals/validation-notes.md`.
 
