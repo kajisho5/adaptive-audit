@@ -23,6 +23,10 @@ field in sync with this one — `tests/test_versioning.py` enforces it.
 
 Nothing yet.
 
+## [0.1.7] - 2026-09-11
+
+- Remove Japanese example text from the README entirely (#19)
+
 ## [0.1.6] - 2026-09-11
 
 - Fix a real counting error: 4 Remediate trials, not 5 (#18)
