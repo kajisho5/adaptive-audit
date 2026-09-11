@@ -1,13 +1,22 @@
 # Invariant Extraction (opt-in enhancement)
 
-**Status: validated across two independent trials, but still opt-in — not
-part of the default `adaptive-audit-execute` pipeline.** Do not invoke this
+**Status: validated across four trials, but still opt-in — not part of the
+default `adaptive-audit-execute` pipeline.** Do not invoke this
 automatically during a normal run; use it when the user has explicitly asked
 for invariant-based analysis, or when `security` is selected at Standard/Deep
 depth and you judge the extra scrutiny worth the roughly-one-domain's-worth of
 additional cost (see "Trial 2" below for real numbers). This is deliberately
 kept out of `SKILL.md` step 1 as a *default* step rather than promoted to one
 — see "Current standing" below for exactly what has and hasn't been shown.
+
+**Public beta — third-party trial reports wanted.** Every trial so far was
+run by this project's own author using this project's own verification
+methodology, which is not independent evidence of anything — it's the same
+source repeated four times. Before this could reasonably be promoted out of
+opt-in status, it needs trial reports from people with no connection to this
+project, on projects its author has never seen. If you try this on your own
+project, please report back (positive or negative results both count) at
+[issue #12](https://github.com/kajisho5/adaptive-audit/issues/12).
 
 ## What this is
 

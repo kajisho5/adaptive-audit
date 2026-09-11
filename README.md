@@ -73,16 +73,19 @@ confirmed white-space pieces, all now MVP-validated (see
 
 A fifth idea — extracting a project's implied invariants ("a task's owner must
 match the caller") and checking code against them directly, rather than only
-scanning by domain — has now been validated across two independent trials
-(a synthetic fixture, then a real ~10,895-line SaaS project), including one
-case of independently rediscovering a real project's most severe confirmed
-finding via a completely different reasoning path, and one case of finding a
-real issue the domain-based pipeline had missed
+scanning by domain — has now been validated across four trials (a synthetic
+fixture, two runs on a real ~10,895-line SaaS project, and one on a
+~20,571-line C codebase), including repeatedly rediscovering a project's most
+severe confirmed findings via a completely different reasoning path, and
+twice finding real issues the domain-based pipeline had missed
 (`adaptive-audit-execute/references/invariant-extraction.md`). It's still
 **opt-in, not part of the default pipeline** — this was the highest-risk,
-least-proven idea in the original research, and two successful trials (both
-still scoped to auth/access-control-shaped invariants) is real evidence, not
-yet enough to make it a default step for every run or every domain.
+least-proven idea in the original research, and every trial so far was run
+by this project's own author using this project's own verification
+methodology, which isn't independent evidence. **Public beta**: if you try
+it on your own project, reporting the result (positive or negative) at
+[issue #12](https://github.com/kajisho5/adaptive-audit/issues/12) is exactly
+the kind of evidence this needs before it could reasonably move past opt-in.
 
 For a project that's already been fully audited once and only changed a
 little since, `adaptive-audit-plan` (step 0.5) can offer a cheaper **diff-only
