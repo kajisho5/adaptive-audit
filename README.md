@@ -23,8 +23,9 @@
 
 > **Audit-Debt Ledger.** Every plan and every execution is recorded outside the
 > project (`~/.adaptive-audit/`), so a domain that keeps getting skipped across
-> differently-framed requests — this week "セキュリティ見て", next month
-> "パフォーマンス見て" — shows up as accumulating debt even when the current
+> differently-framed requests — this week "look at security" ("セキュリティ見て"),
+> next month "look at performance" ("パフォーマンス見て") — shows up as
+> accumulating debt even when the current
 > request never mentions it. Coverage tracked across audit *types*, not just
 > repeated runs of the same one. → [full explanation](#the-audit-debt-ledger)
 
@@ -123,7 +124,7 @@ Modeled on the `Artifact`/`ProductionReceipt` pattern from [`kajisho5/AI-video-p
 
 ## Remediate (opt-in)
 
-A plain audit request never fixes anything — no matter how severe the findings. Only a **separate, explicit follow-up** ("直して", "直してPRにして") triggers `adaptive-audit-execute` step 6:
+A plain audit request never fixes anything — no matter how severe the findings. Only a **separate, explicit follow-up** ("fix this" / "直して", "fix this and open a PR" / "直してPRにして") triggers `adaptive-audit-execute` step 6:
 
 - Defaults to every CONFIRMED finding when none are named; a PLAUSIBLE finding is never fixed without being asked about first.
 - Checks, and states plainly *before* touching any file, whether this session can actually write to the project and — only if a PR/push was requested — whether it can push to or open a PR against that destination. A requested end-state already known to be impossible (no remote configured, no push credential) never retroactively authorizes a lesser, unrequested action like committing locally.
@@ -172,7 +173,7 @@ Later, to pull in whatever's newest on `main`:
 ```
 /plugin marketplace update adaptive-audit
 ```
-This is a personal/third-party marketplace, not an official Anthropic one, so Claude Code's background auto-update is off by default for it — the command above is the manual pull, or enable it per-marketplace via `/plugin` → Marketplaces → `adaptive-audit` → Enable auto-update. Skill auto-invocation ("バグチェックして", no slash command) works identically either way.
+This is a personal/third-party marketplace, not an official Anthropic one, so Claude Code's background auto-update is off by default for it — the command above is the manual pull, or enable it per-marketplace via `/plugin` → Marketplaces → `adaptive-audit` → Enable auto-update. Skill auto-invocation ("check this for bugs" / "バグチェックして", no slash command) works identically either way.
 
 **Plain copy** (no update mechanism — re-copy by hand for the latest): copy `adaptive-audit-plan/` and `adaptive-audit-execute/` into `.claude/skills/`.
 
@@ -186,7 +187,7 @@ This is a personal/third-party marketplace, not an official Anthropic one, so Cl
 | C/C++ network-facing library | ~20,600 lines | 7 | ~1.53M |
 | TypeScript/Node web app | ~10,900 lines | 6 | ~1.05M |
 
-(Project names withheld deliberately — see `evals/validation-notes.md`.) A Quick-only pass or a plan-only request costs a small fraction of this — depth drives cost, not project size alone. Say so explicitly ("さっと見て" / "軽くチェックして") if cost matters more than thoroughness for a given ask; the plan step reads that as a depth signal.
+(Project names withheld deliberately — see `evals/validation-notes.md`.) A Quick-only pass or a plan-only request costs a small fraction of this — depth drives cost, not project size alone. Say so explicitly ("take a quick look" / "さっと見て", "give it a light check" / "軽くチェックして") if cost matters more than thoroughness for a given ask; the plan step reads that as a depth signal.
 
 ## Development
 
