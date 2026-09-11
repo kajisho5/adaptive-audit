@@ -1250,8 +1250,9 @@ initial trial left open (push/PR-impossible handling, a non-Python target,
 multiple findings in one turn). Step 6 has now been exercised across
 Python/pandas, Go/goroutines, and Node/SQL, across performance,
 concurrency, and injection bug classes, across single- and multi-finding
-requests, and across push-possible and push-impossible destinations — five
-real trials total (iterations 20-22), each independently verified rather
+requests, and across push-possible and push-impossible destinations — four
+real trials total (iterations 20-22: one in iteration 20, two in iteration
+21, one in iteration 22), each independently verified rather
 than asserted, with every SKILL.md wording gap they found fixed directly
 from that evidence. Not a claim that step 6 is now exhaustively validated
 — eval coverage is not the same as formal verification, and this project
