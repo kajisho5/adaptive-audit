@@ -123,6 +123,12 @@ analysis, feature matrix, and naming investigation behind these decisions.
   project that's pure, deterministic logic rather than LLM output, so it's
   the one part an automated test suite can actually protect — `SKILL.md`
   behavior itself is still checked by hand-run evals in `evals/`, not CI.
+- `VERSION` / `CHANGELOG.md` — version bookkeeping only. Bumping `VERSION`
+  on `main` makes `.github/workflows/release.yml` tag it and create a
+  GitHub Release with auto-generated notes; it does **not** update anyone's
+  installed copy of these skills — see `CHANGELOG.md`'s own header for why
+  (no npm/PyPI package, no plugin-marketplace listing, so there's nothing
+  for a version bump to actually push out to).
 
 ## Usage
 
